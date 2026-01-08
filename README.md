@@ -358,6 +358,7 @@ ProtoFlux ノード（ジェネリック型コンポーネント）を追加す�
 |--------|---------------|
 | ValueInput\<int\> | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>` |
 | ValueAdd\<int\> | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueAdd<int>` |
+| ValueDisplay\<int\> | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueDisplay<int>` |
 | WorldTimeFloat | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Time.WorldTimeFloat` |
 | AxisAngle_floatQ | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Math.Quaternions.AxisAngle_floatQ` |
 | HSV_ToColorX | `[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Color.HSV_ToColorX` |
@@ -384,6 +385,27 @@ await client.addComponent({
 await client.addComponent({
   containerSlotId: slotId,
   componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Color.HSV_ToColorX'
+});
+```
+
+### ProtoFlux ノード間の接続
+
+```typescript
+// ValueAdd の A, B 入力に ValueInput ノードを接続
+await client.updateComponent({
+  id: addCompId,
+  members: {
+    A: { $type: 'reference', targetId: input1CompId },
+    B: { $type: 'reference', targetId: input2CompId },
+  }
+});
+
+// ValueDisplay の Input に ValueAdd の出力を接続
+await client.updateComponent({
+  id: displayCompId,
+  members: {
+    Input: { $type: 'reference', targetId: addCompId },
+  }
 });
 ```
 
@@ -508,14 +530,17 @@ node dist/cli.js source --name BoxMesh
 ## サンプルスクリプト
 
 ```bash
+# ProtoFlux 1+1 を作成（ValueInput → ValueAdd → ValueDisplay）
+node dist/scripts/create-flux-add.js ws://localhost:58971
+
 # 東京タワー（詳細版）を作成
-node dist/scripts/create-tokyo-tower-detailed.js ws://localhost:29551
+node dist/scripts/create-tokyo-tower-detailed.js ws://localhost:58971
 
 # 東京スカイツリーを作成
-node dist/scripts/create-skytree.js ws://localhost:29551
+node dist/scripts/create-skytree.js ws://localhost:58971
 
 # 東京タワーを削除
-node dist/scripts/delete-tokyo-tower.js ws://localhost:29551
+node dist/scripts/delete-tokyo-tower.js ws://localhost:58971
 
 # モダンハウス（内装付き）を作成
 node dist/scripts/create-house3.js
