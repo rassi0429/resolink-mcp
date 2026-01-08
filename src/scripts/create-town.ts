@@ -1,5 +1,13 @@
 import { ResoniteLinkClient } from '../index.js';
 
+// Convert Euler angles (degrees) to quaternion
+function eulerToQuaternion(yaw: number): { x: number; y: number; z: number; w: number } {
+  const toRad = Math.PI / 180;
+  const cy = Math.cos(yaw * toRad / 2);
+  const sy = Math.sin(yaw * toRad / 2);
+  return { x: 0, y: sy, z: 0, w: cy };
+}
+
 async function createBox(
   client: ResoniteLinkClient,
   parentId: string,
@@ -52,6 +60,7 @@ async function createBox(
 interface HouseStyle {
   name: string;
   position: { x: number; y: number; z: number };
+  rotation: number; // Y-axis rotation in degrees (0 = door facing +Z)
   wallColor: { r: number; g: number; b: number };
   roofColor: { r: number; g: number; b: number };
   doorColor: { r: number; g: number; b: number };
@@ -66,7 +75,8 @@ interface HouseStyle {
 async function createHouse(client: ResoniteLinkClient, style: HouseStyle): Promise<void> {
   console.log(`    ${style.name}`);
 
-  await client.addSlot({ name: style.name, position: style.position, isActive: true });
+  const rotation = eulerToQuaternion(style.rotation);
+  await client.addSlot({ name: style.name, position: style.position, rotation, isActive: true });
   const house = await client.findSlotByName(style.name, 'Root', 1);
   if (!house?.id) return;
   const houseId = house.id;
@@ -126,8 +136,9 @@ async function createHouse(client: ResoniteLinkClient, style: HouseStyle): Promi
 }
 
 // === CAR ===
-async function createCar(client: ResoniteLinkClient, parentId: string, position: {x: number, y: number, z: number}, rotation: number, color: {r: number, g: number, b: number}, name: string): Promise<void> {
-  await client.addSlot({ parentId, name, position, isActive: true });
+async function createCar(client: ResoniteLinkClient, parentId: string, position: {x: number, y: number, z: number}, rotationDeg: number, color: {r: number, g: number, b: number}, name: string): Promise<void> {
+  const rotation = eulerToQuaternion(rotationDeg);
+  await client.addSlot({ parentId, name, position, rotation, isActive: true });
   const car = await client.findSlotByName(name, parentId, 1);
   if (!car?.id) return;
   const carId = car.id;
@@ -135,10 +146,6 @@ async function createCar(client: ResoniteLinkClient, parentId: string, position:
   const black = { r: 0.05, g: 0.05, b: 0.05 };
   const glass = { r: 0.6, g: 0.7, b: 0.8 };
   const chrome = { r: 0.8, g: 0.8, b: 0.82 };
-
-  // Adjust positions based on rotation (0 = facing +Z, 90 = facing +X)
-  const cos = Math.cos(rotation * Math.PI / 180);
-  const sin = Math.sin(rotation * Math.PI / 180);
 
   // Body
   await createBox(client, carId, 'Body', { x: 0, y: 0.5, z: 0 }, { x: 1.8, y: 0.5, z: 4 }, color, 0.7);
@@ -179,9 +186,10 @@ async function createCar(client: ResoniteLinkClient, parentId: string, position:
 }
 
 // === SHOP/STORE ===
-async function createShop(client: ResoniteLinkClient, position: {x: number, y: number, z: number}, name: string, signColor: {r: number, g: number, b: number}): Promise<void> {
+async function createShop(client: ResoniteLinkClient, position: {x: number, y: number, z: number}, rotationDeg: number, name: string, signColor: {r: number, g: number, b: number}): Promise<void> {
   console.log(`    ${name}`);
-  await client.addSlot({ name, position, isActive: true });
+  const rotation = eulerToQuaternion(rotationDeg);
+  await client.addSlot({ name, position, rotation, isActive: true });
   const shop = await client.findSlotByName(name, 'Root', 1);
   if (!shop?.id) return;
   const shopId = shop.id;
@@ -371,18 +379,22 @@ async function main() {
     console.log('🏘️ Creating Complete Town...\n');
 
     // === HOUSES (10 total) ===
+    // Road_H1 at z=-8, Road_H2 at z=8, Road_H3 at z=28
+    // Row A (z=-18) faces +Z toward Road_H1 -> rotation 0
+    // Row B (z=18) faces -Z toward Road_H2 -> rotation 180
+    // Row C (z=38) faces -Z toward Road_H3 -> rotation 180
     console.log('  Building houses...');
     const houses: HouseStyle[] = [
-      { name: 'House_A1', position: { x: -22, y: 0, z: -18 }, wallColor: { r: 0.95, g: 0.9, b: 0.8 }, roofColor: { r: 0.6, g: 0.2, b: 0.15 }, doorColor: { r: 0.5, g: 0.25, b: 0.1 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
-      { name: 'House_A2', position: { x: -10, y: 0, z: -18 }, wallColor: { r: 0.9, g: 0.92, b: 0.95 }, roofColor: { r: 0.2, g: 0.3, b: 0.45 }, doorColor: { r: 0.15, g: 0.4, b: 0.2 }, width: 6, depth: 7, height: 3.5, hasPorch: false, hasChimney: true, hasFence: true },
-      { name: 'House_A3', position: { x: 10, y: 0, z: -18 }, wallColor: { r: 0.85, g: 0.9, b: 0.85 }, roofColor: { r: 0.25, g: 0.4, b: 0.25 }, doorColor: { r: 0.6, g: 0.15, b: 0.1 }, width: 5.5, depth: 6.5, height: 3.2, hasPorch: true, hasChimney: false, hasFence: true },
-      { name: 'House_A4', position: { x: 22, y: 0, z: -18 }, wallColor: { r: 0.92, g: 0.88, b: 0.82 }, roofColor: { r: 0.45, g: 0.25, b: 0.2 }, doorColor: { r: 0.2, g: 0.25, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
-      { name: 'House_B1', position: { x: -22, y: 0, z: 18 }, wallColor: { r: 0.95, g: 0.95, b: 0.9 }, roofColor: { r: 0.5, g: 0.3, b: 0.2 }, doorColor: { r: 0.2, g: 0.35, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
-      { name: 'House_B2', position: { x: -10, y: 0, z: 18 }, wallColor: { r: 0.88, g: 0.92, b: 0.95 }, roofColor: { r: 0.15, g: 0.25, b: 0.4 }, doorColor: { r: 0.7, g: 0.2, b: 0.15 }, width: 6, depth: 7, height: 3.5, hasPorch: true, hasChimney: true, hasFence: false },
-      { name: 'House_B3', position: { x: 10, y: 0, z: 18 }, wallColor: { r: 0.95, g: 0.92, b: 0.85 }, roofColor: { r: 0.35, g: 0.2, b: 0.15 }, doorColor: { r: 0.25, g: 0.3, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: false, hasChimney: true, hasFence: true },
-      { name: 'House_B4', position: { x: 22, y: 0, z: 18 }, wallColor: { r: 0.9, g: 0.95, b: 0.9 }, roofColor: { r: 0.2, g: 0.35, b: 0.2 }, doorColor: { r: 0.55, g: 0.35, b: 0.2 }, width: 5.5, depth: 6.5, height: 3.3, hasPorch: true, hasChimney: false, hasFence: false },
-      { name: 'House_C1', position: { x: -22, y: 0, z: 38 }, wallColor: { r: 0.95, g: 0.85, b: 0.8 }, roofColor: { r: 0.55, g: 0.25, b: 0.2 }, doorColor: { r: 0.4, g: 0.55, b: 0.4 }, width: 5.5, depth: 6, height: 3.2, hasPorch: true, hasChimney: false, hasFence: true },
-      { name: 'House_C2', position: { x: 22, y: 0, z: 38 }, wallColor: { r: 0.9, g: 0.85, b: 0.8 }, roofColor: { r: 0.5, g: 0.3, b: 0.2 }, doorColor: { r: 0.15, g: 0.35, b: 0.45 }, width: 5, depth: 5.5, height: 3, hasPorch: false, hasChimney: true, hasFence: true },
+      { name: 'House_A1', position: { x: -22, y: 0, z: -18 }, rotation: 0, wallColor: { r: 0.95, g: 0.9, b: 0.8 }, roofColor: { r: 0.6, g: 0.2, b: 0.15 }, doorColor: { r: 0.5, g: 0.25, b: 0.1 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
+      { name: 'House_A2', position: { x: -10, y: 0, z: -18 }, rotation: 0, wallColor: { r: 0.9, g: 0.92, b: 0.95 }, roofColor: { r: 0.2, g: 0.3, b: 0.45 }, doorColor: { r: 0.15, g: 0.4, b: 0.2 }, width: 6, depth: 7, height: 3.5, hasPorch: false, hasChimney: true, hasFence: true },
+      { name: 'House_A3', position: { x: 10, y: 0, z: -18 }, rotation: 0, wallColor: { r: 0.85, g: 0.9, b: 0.85 }, roofColor: { r: 0.25, g: 0.4, b: 0.25 }, doorColor: { r: 0.6, g: 0.15, b: 0.1 }, width: 5.5, depth: 6.5, height: 3.2, hasPorch: true, hasChimney: false, hasFence: true },
+      { name: 'House_A4', position: { x: 22, y: 0, z: -18 }, rotation: 0, wallColor: { r: 0.92, g: 0.88, b: 0.82 }, roofColor: { r: 0.45, g: 0.25, b: 0.2 }, doorColor: { r: 0.2, g: 0.25, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
+      { name: 'House_B1', position: { x: -22, y: 0, z: 18 }, rotation: 180, wallColor: { r: 0.95, g: 0.95, b: 0.9 }, roofColor: { r: 0.5, g: 0.3, b: 0.2 }, doorColor: { r: 0.2, g: 0.35, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: true, hasChimney: true, hasFence: false },
+      { name: 'House_B2', position: { x: -10, y: 0, z: 18 }, rotation: 180, wallColor: { r: 0.88, g: 0.92, b: 0.95 }, roofColor: { r: 0.15, g: 0.25, b: 0.4 }, doorColor: { r: 0.7, g: 0.2, b: 0.15 }, width: 6, depth: 7, height: 3.5, hasPorch: true, hasChimney: true, hasFence: false },
+      { name: 'House_B3', position: { x: 10, y: 0, z: 18 }, rotation: 180, wallColor: { r: 0.95, g: 0.92, b: 0.85 }, roofColor: { r: 0.35, g: 0.2, b: 0.15 }, doorColor: { r: 0.25, g: 0.3, b: 0.5 }, width: 5, depth: 6, height: 3, hasPorch: false, hasChimney: true, hasFence: true },
+      { name: 'House_B4', position: { x: 22, y: 0, z: 18 }, rotation: 180, wallColor: { r: 0.9, g: 0.95, b: 0.9 }, roofColor: { r: 0.2, g: 0.35, b: 0.2 }, doorColor: { r: 0.55, g: 0.35, b: 0.2 }, width: 5.5, depth: 6.5, height: 3.3, hasPorch: true, hasChimney: false, hasFence: false },
+      { name: 'House_C1', position: { x: -22, y: 0, z: 38 }, rotation: 180, wallColor: { r: 0.95, g: 0.85, b: 0.8 }, roofColor: { r: 0.55, g: 0.25, b: 0.2 }, doorColor: { r: 0.4, g: 0.55, b: 0.4 }, width: 5.5, depth: 6, height: 3.2, hasPorch: true, hasChimney: false, hasFence: true },
+      { name: 'House_C2', position: { x: 22, y: 0, z: 38 }, rotation: 180, wallColor: { r: 0.9, g: 0.85, b: 0.8 }, roofColor: { r: 0.5, g: 0.3, b: 0.2 }, doorColor: { r: 0.15, g: 0.35, b: 0.45 }, width: 5, depth: 5.5, height: 3, hasPorch: false, hasChimney: true, hasFence: true },
     ];
 
     for (const house of houses) {
@@ -390,10 +402,11 @@ async function main() {
     }
 
     // === SHOPS ===
+    // Shops at z=38 face -Z toward Road_H3 -> rotation 180
     console.log('\n  Building shops...');
-    await createShop(client, { x: -10, y: 0, z: 38 }, 'Cafe', { r: 0.6, g: 0.3, b: 0.2 });
-    await createShop(client, { x: 0, y: 0, z: 38 }, 'Grocery', { r: 0.2, g: 0.5, b: 0.3 });
-    await createShop(client, { x: 10, y: 0, z: 38 }, 'Bookstore', { r: 0.3, g: 0.35, b: 0.5 });
+    await createShop(client, { x: -10, y: 0, z: 38 }, 180, 'Cafe', { r: 0.6, g: 0.3, b: 0.2 });
+    await createShop(client, { x: 0, y: 0, z: 38 }, 180, 'Grocery', { r: 0.2, g: 0.5, b: 0.3 });
+    await createShop(client, { x: 10, y: 0, z: 38 }, 180, 'Bookstore', { r: 0.3, g: 0.35, b: 0.5 });
 
     // === INFRASTRUCTURE ===
     console.log('\n  Creating infrastructure...');
@@ -450,17 +463,22 @@ async function main() {
     }
 
     // === CARS ===
+    // Horizontal roads (z=-8, 8, 28): cars face +X (90) or -X (270)
+    // Vertical roads (x=-16, 0, 16): cars face +Z (0) or -Z (180)
     console.log('    Cars...');
     const carData = [
-      { pos: { x: -20, y: 0, z: -6 }, rot: 0, color: { r: 0.8, g: 0.15, b: 0.1 } },
-      { pos: { x: -12, y: 0, z: -10 }, rot: 0, color: { r: 0.1, g: 0.3, b: 0.7 } },
-      { pos: { x: 5, y: 0, z: -6 }, rot: 180, color: { r: 0.15, g: 0.15, b: 0.15 } },
-      { pos: { x: 20, y: 0, z: -10 }, rot: 0, color: { r: 0.95, g: 0.95, b: 0.95 } },
-      { pos: { x: -18, y: 0, z: 6 }, rot: 90, color: { r: 0.2, g: 0.5, b: 0.2 } },
-      { pos: { x: -14, y: 0, z: 10 }, rot: 180, color: { r: 0.6, g: 0.4, b: 0.1 } },
+      // On Road_H1 (z=-8), facing +X or -X
+      { pos: { x: -20, y: 0, z: -6 }, rot: 90, color: { r: 0.8, g: 0.15, b: 0.1 } },
+      { pos: { x: -12, y: 0, z: -10 }, rot: 270, color: { r: 0.1, g: 0.3, b: 0.7 } },
+      { pos: { x: 5, y: 0, z: -6 }, rot: 90, color: { r: 0.15, g: 0.15, b: 0.15 } },
+      { pos: { x: 20, y: 0, z: -10 }, rot: 270, color: { r: 0.95, g: 0.95, b: 0.95 } },
+      // On Road_H2 (z=8), facing +X or -X
+      { pos: { x: -20, y: 0, z: 6 }, rot: 90, color: { r: 0.2, g: 0.5, b: 0.2 } },
+      { pos: { x: -6, y: 0, z: 10 }, rot: 270, color: { r: 0.6, g: 0.4, b: 0.1 } },
       { pos: { x: 12, y: 0, z: 6 }, rot: 90, color: { r: 0.5, g: 0.1, b: 0.4 } },
-      { pos: { x: 2, y: 0, z: 26 }, rot: 0, color: { r: 0.1, g: 0.6, b: 0.6 } },
-      { pos: { x: -6, y: 0, z: 30 }, rot: 180, color: { r: 0.7, g: 0.7, b: 0.72 } },
+      // On Road_H3 (z=28), facing +X or -X
+      { pos: { x: -8, y: 0, z: 26 }, rot: 90, color: { r: 0.1, g: 0.6, b: 0.6 } },
+      { pos: { x: 8, y: 0, z: 30 }, rot: 270, color: { r: 0.7, g: 0.7, b: 0.72 } },
     ];
     for (let i = 0; i < carData.length; i++) {
       await createCar(client, infraId, carData[i].pos, carData[i].rot, carData[i].color, `Car${i}`);

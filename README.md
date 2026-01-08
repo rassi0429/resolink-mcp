@@ -11,6 +11,10 @@ npm run build
 
 ## MCP サーバとして使用
 
+### Claude Code 設定
+
+プロジェクトルートの `.mcp.json` に設定済み。Claude Code を再起動すると自動的にMCPサーバーが利用可能になります。
+
 ### Claude Desktop 設定
 
 `claude_desktop_config.json` に以下を追加:
@@ -162,10 +166,21 @@ await client.updateComponent({
 
 ### Materials リストの更新（2段階）
 
-MeshRenderer の Materials リストを更新するには2段階の操作が必要:
+MeshRenderer の Materials リストを更新するには2段階の操作が必要です。
+
+#### なぜ2段階必要か
+
+ResoniteLink の制限により、リスト要素への参照設定は以下の動作をします：
+
+1. **1回目の更新**: リストに新しい要素が追加されるが、`targetId` は **null になる**
+2. **2回目の更新**: 要素の `id` を指定することで、既存要素の `targetId` を設定できる
+
+つまり、要素の追加と参照の設定は別々の操作として行う必要があります。
+
+#### コード例
 
 ```typescript
-// 1. まずリストに要素を追加
+// 1. まずリストに要素を追加（この時点では targetId は null になる）
 await client.updateComponent({
   id: rendererId,
   members: {
@@ -176,9 +191,11 @@ await client.updateComponent({
   }
 });
 
-// 2. 追加された要素のIDを取得して、参照を設定
+// 2. 追加された要素のIDを取得
 const rendererData = await client.getComponent(rendererId);
 const elementId = rendererData.data.members.Materials.elements[0].id;
+
+// 3. 要素のIDを指定して、参照を設定
 await client.updateComponent({
   id: rendererId,
   members: {
@@ -189,6 +206,12 @@ await client.updateComponent({
   }
 });
 ```
+
+#### 重要なポイント
+
+- `id` フィールドを省略すると、新しい要素が追加される（既存要素は更新されない）
+- `id` フィールドを指定すると、その ID を持つ既存要素が更新される
+- 1回目で `targetId` を指定しても無視され、null になる
 
 ## 制限事項: ProtoFlux コンポーネント
 

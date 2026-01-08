@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
 import {
   Message,
   Response,
@@ -27,6 +28,9 @@ export interface ResoniteLinkClientOptions {
   url: string;
   autoReconnect?: boolean;
   reconnectInterval?: number;
+  debug?: boolean;
+  logFile?: string;
+  requestTimeout?: number;
 }
 
 type PendingRequest = {
@@ -42,11 +46,52 @@ export class ResoniteLinkClient {
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private isConnected = false;
   private reconnecting = false;
+  private debug: boolean;
+  private logFile: string | null;
+  private logStream: fs.WriteStream | null = null;
+  private requestTimeout: number;
 
   constructor(options: ResoniteLinkClientOptions) {
     this.url = options.url;
     this.autoReconnect = options.autoReconnect ?? false;
     this.reconnectInterval = options.reconnectInterval ?? 5000;
+    this.debug = options.debug ?? false;
+    this.logFile = options.logFile ?? null;
+    this.requestTimeout = options.requestTimeout ?? 30000; // Default 30s timeout
+
+    if (this.logFile) {
+      this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
+      this.log('=== Session started ===');
+    }
+  }
+
+  private log(message: string, data?: any): void {
+    if (!this.debug && !this.logStream) return;
+
+    const timestamp = new Date().toISOString();
+    const logLine = data
+      ? `[${timestamp}] ${message}: ${JSON.stringify(data, null, 2)}`
+      : `[${timestamp}] ${message}`;
+
+    if (this.debug) {
+      console.log(logLine);
+    }
+
+    if (this.logStream) {
+      this.logStream.write(logLine + '\n');
+    }
+  }
+
+  private logError(message: string, error?: any): void {
+    const timestamp = new Date().toISOString();
+    const errorDetail = error instanceof Error ? error.message : JSON.stringify(error);
+    const logLine = `[${timestamp}] ERROR: ${message} - ${errorDetail}`;
+
+    console.error(logLine);
+
+    if (this.logStream) {
+      this.logStream.write(logLine + '\n');
+    }
   }
 
   get connected(): boolean {
@@ -54,12 +99,14 @@ export class ResoniteLinkClient {
   }
 
   async connect(): Promise<void> {
+    this.log(`Connecting to ${this.url}`);
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(this.url);
 
       this.ws.on('open', () => {
         this.isConnected = true;
         this.reconnecting = false;
+        this.log('Connected successfully');
         resolve();
       });
 
@@ -68,6 +115,7 @@ export class ResoniteLinkClient {
       });
 
       this.ws.on('close', () => {
+        this.log('Connection closed');
         this.isConnected = false;
         this.rejectAllPending(new Error('Connection closed'));
 
@@ -78,6 +126,7 @@ export class ResoniteLinkClient {
       });
 
       this.ws.on('error', (error) => {
+        this.logError('WebSocket error', error);
         if (!this.isConnected) {
           reject(error);
         }
@@ -86,12 +135,18 @@ export class ResoniteLinkClient {
   }
 
   disconnect(): void {
+    this.log('Disconnecting');
     this.autoReconnect = false;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
     this.isConnected = false;
+    if (this.logStream) {
+      this.log('=== Session ended ===');
+      this.logStream.end();
+      this.logStream = null;
+    }
   }
 
   private handleMessage(data: WebSocket.Data): void {
@@ -99,12 +154,19 @@ export class ResoniteLinkClient {
       const response = JSON.parse(data.toString()) as Response;
       const pending = this.pendingRequests.get(response.sourceMessageId);
 
+      // Log response
+      this.log('RECV', { success: response.success, messageId: response.sourceMessageId, error: response.errorInfo });
+
+      if (!response.success && response.errorInfo) {
+        this.logError(`Response error for ${response.sourceMessageId}`, response.errorInfo);
+      }
+
       if (pending) {
         this.pendingRequests.delete(response.sourceMessageId);
         pending.resolve(response);
       }
     } catch (error) {
-      console.error('Failed to parse message:', error);
+      this.logError('Failed to parse message', error);
     }
   }
 
@@ -117,17 +179,44 @@ export class ResoniteLinkClient {
 
   private async sendMessage<T extends Response>(message: Message): Promise<T> {
     if (!this.ws || !this.isConnected) {
+      this.logError('Send failed - not connected', message.$type);
       throw new Error('Not connected');
     }
 
+    // Log the message being sent (truncate large data)
+    const logMessage: any = { $type: message.$type, messageId: message.messageId };
+    if ('slotId' in message) logMessage.slotId = (message as any).slotId;
+    if ('componentType' in message) logMessage.componentType = (message as any).componentType;
+    if ('containerSlotId' in message) logMessage.containerSlotId = (message as any).containerSlotId;
+    if ('id' in message) logMessage.id = (message as any).id;
+    this.log('SEND', logMessage);
+
     return new Promise((resolve, reject) => {
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        if (this.pendingRequests.has(message.messageId)) {
+          this.pendingRequests.delete(message.messageId);
+          const error = new Error(`Request timeout after ${this.requestTimeout}ms: ${message.$type} (${message.messageId})`);
+          this.logError('Request timeout', { messageId: message.messageId, type: message.$type });
+          reject(error);
+        }
+      }, this.requestTimeout);
+
       this.pendingRequests.set(message.messageId, {
-        resolve: resolve as (response: Response) => void,
-        reject,
+        resolve: (response: Response) => {
+          clearTimeout(timeoutId);
+          resolve(response as T);
+        },
+        reject: (error: Error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        },
       });
 
       this.ws!.send(JSON.stringify(message), (error) => {
         if (error) {
+          clearTimeout(timeoutId);
+          this.logError('Send error', error);
           this.pendingRequests.delete(message.messageId);
           reject(error);
         }

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "resonitelink": {
+      "command": "node",
+      "args": ["C:/Users/neo/GitHub/resolink_mcp/dist/mcp-server.js"],
+      "env": {
+        "RESONITE_WS_URL": "ws://localhost:29551"
+      }
+    },
+    "resonite-camera": {
+      "command": "node",
+      "args": ["C:/Users/neo/GitHub/resolink_mcp/dist/camera-mcp-server.js"],
+      "env": {
+        "CAMERA_WS_URL": "wss://wsecho.kokoa.dev/mcp/cam"
+      }
+    }
+  }
+}
