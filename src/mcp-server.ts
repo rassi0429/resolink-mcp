@@ -4,7 +4,10 @@ import * as z from 'zod';
 import { ResoniteLinkClient } from './client.js';
 import { DecompileSearch } from './decompile-search.js';
 
+
 const DEFAULT_WS_URL = process.env.RESONITE_WS_URL || 'ws://localhost:29551';
+
+const decompileSearch = new DecompileSearch('C:\\Users\\neo\\GitHub\\reso-decompile\\sources');
 
 let client: ResoniteLinkClient | null = null;
 let isConnected = false;
@@ -232,7 +235,6 @@ server.registerTool(
 );
 
 // === Decompile Search Tools ===
-const decompileSearch = new DecompileSearch();
 
 server.registerTool(
   'search_components',

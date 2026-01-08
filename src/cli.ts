@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { ResoniteLinkClient, ROOT_SLOT_ID, Slot, Component, Member } from './index.js';
-import { DecompileSearch } from './decompile-search.js';
+
 
 const DEFAULT_URL = 'ws://localhost:9080';
 
@@ -104,180 +104,12 @@ function formatComponent(comp: Component): string {
   return lines.join('\n');
 }
 
-async function handleOfflineCommand(options: CliOptions): Promise<void> {
-  const search = new DecompileSearch();
-
-  switch (options.command) {
-    case 'search':
-    case 'search-component': {
-      const query = options.args.query || options.args.q || options.args.name;
-      if (!query) {
-        console.error('Error: --query or --name is required');
-        process.exit(1);
-      }
-
-      const maxResults = parseInt(options.args.max ?? '20', 10);
-      const results = await search.searchComponents(query, { maxResults });
-
-      if (results.length === 0) {
-        console.log(`No components found matching "${query}"`);
-      } else {
-        console.log(`Found ${results.length} component(s):\n`);
-        for (const info of results) {
-          console.log(`  ${info.name}`);
-          if (info.category) console.log(`    Category: ${info.category}`);
-          if (info.baseClass) console.log(`    Base: ${info.baseClass}`);
-        }
-      }
-      break;
-    }
-
-    case 'component-info':
-    case 'info': {
-      const name = options.args.name || options.args.component;
-      if (!name) {
-        console.error('Error: --name is required');
-        process.exit(1);
-      }
-
-      const info = await search.getComponent(name);
-
-      if (info) {
-        console.log(search.formatComponentInfo(info));
-      } else {
-        console.log(`Component "${name}" not found`);
-        const results = await search.searchComponents(name, { maxResults: 5 });
-        if (results.length > 0) {
-          console.log('\nDid you mean:');
-          for (const r of results) {
-            console.log(`  - ${r.name}`);
-          }
-        }
-      }
-      break;
-    }
-
-    case 'search-category':
-    case 'category': {
-      const category = options.args.category || options.args.cat;
-      if (!category) {
-        console.error('Error: --category is required');
-        process.exit(1);
-      }
-
-      const maxResults = parseInt(options.args.max ?? '50', 10);
-      const results = await search.searchByCategory(category, { maxResults });
-
-      if (results.length === 0) {
-        console.log(`No components found in category "${category}"`);
-      } else {
-        console.log(`Found ${results.length} component(s) in "${category}":\n`);
-        for (const info of results) {
-          console.log(`  - ${info.name}`);
-        }
-      }
-      break;
-    }
-
-    case 'list-categories':
-    case 'categories': {
-      const categories = await search.listCategories();
-
-      console.log(`Found ${categories.length} categories:\n`);
-      for (const cat of categories) {
-        console.log(`  ${cat}`);
-      }
-      break;
-    }
-
-    case 'search-member':
-    case 'member': {
-      const memberName = options.args.member || options.args.name;
-      if (!memberName) {
-        console.error('Error: --member or --name is required');
-        process.exit(1);
-      }
-
-      const maxResults = parseInt(options.args.max ?? '30', 10);
-      const results = await search.searchByMember(memberName, { maxResults });
-
-      if (results.length === 0) {
-        console.log(`No components found with member "${memberName}"`);
-      } else {
-        console.log(`Found ${results.length} component(s) with member matching "${memberName}":\n`);
-        for (const info of results) {
-          const matchingMembers = info.members.filter(m =>
-            m.name.toLowerCase().includes(memberName.toLowerCase())
-          );
-          console.log(`  ${info.name}`);
-          for (const m of matchingMembers) {
-            console.log(`    - ${m.name}: ${m.type}`);
-          }
-        }
-      }
-      break;
-    }
-
-    case 'search-all':
-    case 'grep': {
-      const query = options.args.query || options.args.q;
-      if (!query) {
-        console.error('Error: --query or --q is required');
-        process.exit(1);
-      }
-
-      const maxResults = parseInt(options.args.max ?? '30', 10);
-      const results = await search.searchAllSources(query, { maxResults });
-
-      if (results.length === 0) {
-        console.log(`No matches found for "${query}"`);
-      } else {
-        console.log(`Found matches in ${results.length} file(s):\n`);
-        for (const result of results) {
-          console.log(`\n${result.file}:`);
-          for (const match of result.matches) {
-            console.log(`  ${match}`);
-          }
-        }
-      }
-      break;
-    }
-
-    case 'source': {
-      const name = options.args.name || options.args.component;
-      if (!name) {
-        console.error('Error: --name is required');
-        process.exit(1);
-      }
-
-      const source = await search.getComponentSource(name);
-
-      if (source) {
-        console.log(source);
-      } else {
-        console.log(`Component "${name}" not found`);
-      }
-      break;
-    }
-  }
-}
-
 async function main() {
   const options = parseArgs(process.argv);
 
   if (!options.command || options.command === 'help') {
     printHelp();
     process.exit(0);
-  }
-
-  // Commands that don't require connection
-  const offlineCommands = ['search', 'search-component', 'info', 'component-info',
-    'category', 'search-category', 'categories', 'list-categories',
-    'member', 'search-member', 'grep', 'search-all', 'source'];
-
-  if (offlineCommands.includes(options.command)) {
-    await handleOfflineCommand(options);
-    return;
   }
 
   const client = new ResoniteLinkClient({ url: options.url });

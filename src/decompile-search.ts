@@ -1,321 +1,246 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 export interface ComponentInfo {
   name: string;
-  fullPath: string;
+  file: string;
   category?: string;
   baseClass?: string;
-  interfaces?: string[];
   members: MemberInfo[];
 }
 
 export interface MemberInfo {
   name: string;
   type: string;
-  attributes?: string[];
+  isReadonly: boolean;
+  isStatic: boolean;
 }
 
-export interface SearchOptions {
-  caseSensitive?: boolean;
-  maxResults?: number;
+export interface SearchResult {
+  file: string;
+  matches: string[];
 }
-
-const DEFAULT_DECOMPILE_PATH = 'C:\\Users\\neo\\GitHub\\reso-decompile\\sources';
 
 export class DecompileSearch {
-  private basePath: string;
-  private componentCache: Map<string, ComponentInfo> = new Map();
-  private indexBuilt: boolean = false;
+  private sourcePath: string;
 
-  constructor(basePath: string = DEFAULT_DECOMPILE_PATH) {
-    this.basePath = basePath;
+  constructor(sourcePath?: string) {
+    this.sourcePath = sourcePath || 'C:\\Users\\neo\\GitHub\\reso-decompile\\sources';
   }
 
-  /**
-   * Search for components by name (partial match)
-   */
-  async searchComponents(query: string, options: SearchOptions = {}): Promise<ComponentInfo[]> {
-    const { caseSensitive = false, maxResults = 50 } = options;
+  async searchComponents(query: string, options: { maxResults?: number } = {}): Promise<ComponentInfo[]> {
     const results: ComponentInfo[] = [];
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
+    const maxResults = options.maxResults || 20;
 
-    const frooxEnginePath = path.join(this.basePath, 'FrooxEngine');
-    if (!fs.existsSync(frooxEnginePath)) {
-      throw new Error(`FrooxEngine path not found: ${frooxEnginePath}`);
-    }
+    try {
+      await this.scanDirectory(this.sourcePath, async (filePath) => {
+        if (results.length >= maxResults) return;
 
-    const files = fs.readdirSync(frooxEnginePath).filter(f => f.endsWith('.cs'));
-
-    for (const file of files) {
-      const fileName = file.replace('.cs', '');
-      const compareFileName = caseSensitive ? fileName : fileName.toLowerCase();
-
-      if (compareFileName.includes(searchQuery)) {
-        const info = await this.getComponentInfo(path.join(frooxEnginePath, file));
-        if (info) {
-          results.push(info);
-          if (results.length >= maxResults) break;
+        const fileName = path.basename(filePath, '.cs');
+        if (fileName.toLowerCase().includes(query.toLowerCase())) {
+          const info = await this.parseComponentFile(filePath);
+          if (info) {
+            results.push(info);
+          }
         }
-      }
+      });
+    } catch (error) {
+      console.error('Error searching components:', error);
     }
 
     return results;
   }
 
-  /**
-   * Search for components by category
-   */
-  async searchByCategory(category: string, options: SearchOptions = {}): Promise<ComponentInfo[]> {
-    const { caseSensitive = false, maxResults = 100 } = options;
-    const results: ComponentInfo[] = [];
-    const searchCategory = caseSensitive ? category : category.toLowerCase();
-
-    const frooxEnginePath = path.join(this.basePath, 'FrooxEngine');
-    const files = fs.readdirSync(frooxEnginePath).filter(f => f.endsWith('.cs'));
-
-    for (const file of files) {
-      const info = await this.getComponentInfo(path.join(frooxEnginePath, file));
-      if (info?.category) {
-        const compareCategory = caseSensitive ? info.category : info.category.toLowerCase();
-        if (compareCategory.includes(searchCategory)) {
-          results.push(info);
-          if (results.length >= maxResults) break;
+  async getComponent(name: string): Promise<ComponentInfo | null> {
+    let result: ComponentInfo | null = null;
+    try {
+      await this.scanDirectory(this.sourcePath, async (filePath) => {
+        if (result) return;
+        const fileName = path.basename(filePath, '.cs');
+        if (fileName === name) {
+          result = await this.parseComponentFile(filePath);
         }
-      }
+      });
+    } catch (error) {
+      console.error('Error getting component:', error);
     }
-
-    return results;
+    return result;
   }
 
-  /**
-   * Search for components that have a specific member
-   */
-  async searchByMember(memberName: string, options: SearchOptions = {}): Promise<ComponentInfo[]> {
-    const { caseSensitive = false, maxResults = 50 } = options;
-    const results: ComponentInfo[] = [];
-    const searchMember = caseSensitive ? memberName : memberName.toLowerCase();
-
-    const frooxEnginePath = path.join(this.basePath, 'FrooxEngine');
-    const files = fs.readdirSync(frooxEnginePath).filter(f => f.endsWith('.cs'));
-
-    for (const file of files) {
-      const info = await this.getComponentInfo(path.join(frooxEnginePath, file));
-      if (info) {
-        const hasMatch = info.members.some(m => {
-          const compareName = caseSensitive ? m.name : m.name.toLowerCase();
-          return compareName.includes(searchMember);
-        });
-        if (hasMatch) {
-          results.push(info);
-          if (results.length >= maxResults) break;
+  async getComponentSource(name: string): Promise<string | null> {
+    let source: string | null = null;
+    try {
+      await this.scanDirectory(this.sourcePath, async (filePath) => {
+        if (source) return;
+        const fileName = path.basename(filePath, '.cs');
+        if (fileName === name) {
+          source = await fs.readFile(filePath, 'utf-8');
         }
-      }
+      });
+    } catch (error) {
+      console.error('Error getting component source:', error);
     }
-
-    return results;
+    return source;
   }
 
-  /**
-   * Get detailed info about a specific component
-   */
-  async getComponent(componentName: string): Promise<ComponentInfo | null> {
-    // Try exact match first
-    const frooxEnginePath = path.join(this.basePath, 'FrooxEngine');
-    const exactPath = path.join(frooxEnginePath, `${componentName}.cs`);
-
-    if (fs.existsSync(exactPath)) {
-      return this.getComponentInfo(exactPath);
-    }
-
-    // Try case-insensitive search
-    const files = fs.readdirSync(frooxEnginePath).filter(f => f.endsWith('.cs'));
-    const lowerName = componentName.toLowerCase();
-    const match = files.find(f => f.toLowerCase() === `${lowerName}.cs`);
-
-    if (match) {
-      return this.getComponentInfo(path.join(frooxEnginePath, match));
-    }
-
-    return null;
-  }
-
-  /**
-   * List all available categories
-   */
   async listCategories(): Promise<string[]> {
     const categories = new Set<string>();
-    const frooxEnginePath = path.join(this.basePath, 'FrooxEngine');
-    const files = fs.readdirSync(frooxEnginePath).filter(f => f.endsWith('.cs'));
-
-    for (const file of files) {
-      const info = await this.getComponentInfo(path.join(frooxEnginePath, file));
-      if (info?.category) {
-        categories.add(info.category);
-      }
+    try {
+        await this.scanDirectory(this.sourcePath, async (filePath) => {
+             const content = await fs.readFile(filePath, 'utf-8');
+             const match = content.match(/\x5BCategory\x28(?:new string\[\]\s*\{)?\s*\"([^\"]+)\"/);
+             if (match) {
+                 categories.add(match[1]);
+             }
+        });
+    } catch (error) {
+        console.error('Error listing categories:', error);
     }
-
     return Array.from(categories).sort();
   }
 
-  /**
-   * Search in all source directories (not just FrooxEngine)
-   */
-  async searchAllSources(query: string, options: SearchOptions = {}): Promise<{ file: string; matches: string[] }[]> {
-    const { caseSensitive = false, maxResults = 100 } = options;
-    const results: { file: string; matches: string[] }[] = [];
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
-
-    const searchDir = (dir: string) => {
-      if (!fs.existsSync(dir)) return;
-
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (results.length >= maxResults) return;
-
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          searchDir(fullPath);
-        } else if (entry.name.endsWith('.cs')) {
-          try {
-            const content = fs.readFileSync(fullPath, 'utf-8');
-            const lines = content.split('\n');
-            const matches: string[] = [];
-
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i];
-              const compareLine = caseSensitive ? line : line.toLowerCase();
-              if (compareLine.includes(searchQuery)) {
-                matches.push(`${i + 1}: ${line.trim().substring(0, 100)}`);
+  async searchByCategory(category: string, options: { maxResults?: number } = {}): Promise<ComponentInfo[]> {
+      const results: ComponentInfo[] = [];
+      const maxResults = options.maxResults || 50;
+      try {
+          await this.scanDirectory(this.sourcePath, async (filePath) => {
+              if (results.length >= maxResults) return;
+              const content = await fs.readFile(filePath, 'utf-8');
+              if (content.includes(`"${category}"`)) { // Simple check first
+                  const info = await this.parseComponentFile(filePath);
+                  if (info && info.category === category) {
+                      results.push(info);
+                  }
               }
-            }
-
-            if (matches.length > 0) {
-              results.push({
-                file: fullPath.replace(this.basePath + path.sep, ''),
-                matches: matches.slice(0, 10), // Limit matches per file
-              });
-            }
-          } catch (e) {
-            // Skip files that can't be read
-          }
-        }
+          });
+      } catch (error) {
+          console.error('Error searching by category:', error);
       }
-    };
+      return results;
+  }
 
-    searchDir(this.basePath);
+  async searchByMember(memberName: string, options: { maxResults?: number } = {}): Promise<ComponentInfo[]> {
+    const results: ComponentInfo[] = [];
+    const maxResults = options.maxResults || 20;
+
+    try {
+        await this.scanDirectory(this.sourcePath, async (filePath) => {
+            if (results.length >= maxResults) return;
+            // specific optimization: check file content before parsing
+            const content = await fs.readFile(filePath, 'utf-8');
+            if (content.includes(memberName)) {
+                 const info = await this.parseComponentFile(filePath);
+                 if (info && info.members.some(m => m.name.toLowerCase().includes(memberName.toLowerCase()))) {
+                     results.push(info);
+                 }
+            }
+        });
+    } catch (error) {
+        console.error('Error searching by member:', error);
+    }
     return results;
   }
 
-  /**
-   * Get the full source code of a component
-   */
-  async getComponentSource(componentName: string): Promise<string | null> {
-    const info = await this.getComponent(componentName);
-    if (!info) return null;
+  async searchAllSources(query: string, options: { maxResults?: number } = {}): Promise<SearchResult[]> {
+      const results: SearchResult[] = [];
+      const maxResults = options.maxResults || 30;
 
-    return fs.readFileSync(info.fullPath, 'utf-8');
+      try {
+          await this.scanDirectory(this.sourcePath, async (filePath) => {
+              if (results.length >= maxResults) return;
+              const content = await fs.readFile(filePath, 'utf-8');
+              if (content.includes(query)) {
+                  const matches: string[] = [];
+                  const lines = content.split('\n');
+                  for (let i = 0; i < lines.length; i++) {
+                      if (lines[i].includes(query)) {
+                          matches.push(`Line ${i + 1}: ${lines[i].trim()}`);
+                          if (matches.length >= 5) break; // Limit matches per file
+                      }
+                  }
+                  if (matches.length > 0) {
+                      results.push({ file: path.basename(filePath), matches });
+                  }
+              }
+          });
+      } catch (error) {
+          console.error('Error grepping sources:', error);
+      }
+      return results;
   }
 
-  /**
-   * Parse a C# file to extract component info
-   */
-  private async getComponentInfo(filePath: string): Promise<ComponentInfo | null> {
-    // Check cache
-    if (this.componentCache.has(filePath)) {
-      return this.componentCache.get(filePath)!;
+
+  private async scanDirectory(dir: string, callback: (filePath: string) => Promise<void>) {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await this.scanDirectory(fullPath, callback);
+      } else if (entry.isFile() && entry.name.endsWith('.cs')) {
+        await callback(fullPath);
+      }
     }
+  }
 
+  private async parseComponentFile(filePath: string): Promise<ComponentInfo | null> {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const lines = content.split('\n');
+      const content = await fs.readFile(filePath, 'utf-8');
+      
+      // Basic regex parsing for C# class definition
+      const classMatch = content.match(/public\s+(?:sealed\s+|abstract\s+)?class\s+(\w+)(?:\s*:\s*([^{\s]+))?/);
+      if (!classMatch) return null;
 
-      const info: ComponentInfo = {
-        name: path.basename(filePath, '.cs'),
-        fullPath: filePath,
-        members: [],
+      const className = classMatch[1];
+      const baseClass = classMatch[2];
+
+      // Extract Category
+      const categoryMatch = content.match(/\x5BCategory\x28(?:new string\[\]\s*\{)?\s*\"([^\"]+)\"/);
+      const category = categoryMatch ? categoryMatch[1] : undefined;
+
+      const members: MemberInfo[] = [];
+
+      // Extract Fields/Properties (Sync<T>, etc.)
+      // public readonly Sync<float> Height;
+      const syncFieldRegex = /public\s+(?:readonly\s+)?Sync<([^>]+)>\s+(\w+);/g;
+      let match;
+      while ((match = syncFieldRegex.exec(content)) !== null) {
+        members.push({
+          name: match[2],
+          type: `Sync<${match[1]}>`,
+          isReadonly: false, // Sync fields themselves are objects, usually readonly, but value is mutable
+          isStatic: false
+        });
+      }
+      
+      return {
+        name: className,
+        file: path.basename(filePath),
+        category,
+        baseClass,
+        members
       };
 
-      // Parse category
-      const categoryMatch = content.match(/\[Category\(new string\[\]\s*{\s*"([^"]+)"/);
-      if (categoryMatch) {
-        info.category = categoryMatch[1];
-      }
-
-      // Parse class declaration
-      const classMatch = content.match(/public\s+(?:abstract\s+)?class\s+(\w+)\s*(?::\s*([^{]+))?/);
-      if (classMatch) {
-        info.name = classMatch[1];
-        if (classMatch[2]) {
-          const inheritance = classMatch[2].split(',').map(s => s.trim());
-          info.baseClass = inheritance[0];
-          info.interfaces = inheritance.slice(1);
-        }
-      }
-
-      // Parse members (Sync<T>, AssetRef<T>, etc.)
-      const memberPatterns = [
-        /public\s+(?:readonly\s+)?Sync<([^>]+)>\s+(\w+)/g,
-        /public\s+(?:readonly\s+)?AssetRef<([^>]+)>\s+(\w+)/g,
-        /public\s+(?:readonly\s+)?SyncRef<([^>]+)>\s+(\w+)/g,
-        /public\s+(?:readonly\s+)?SyncList<([^>]+)>\s+(\w+)/g,
-        /public\s+(?:readonly\s+)?SyncDelegate<([^>]+)>\s+(\w+)/g,
-        /public\s+(?:readonly\s+)?SyncPlayback\s+(\w+)/g,
-      ];
-
-      for (const pattern of memberPatterns) {
-        let match;
-        while ((match = pattern.exec(content)) !== null) {
-          if (match.length === 3) {
-            info.members.push({
-              name: match[2],
-              type: match[1],
-            });
-          } else if (match.length === 2) {
-            info.members.push({
-              name: match[1],
-              type: 'SyncPlayback',
-            });
-          }
-        }
-      }
-
-      // Parse Range attributes
-      const rangePattern = /\[Range\([^)]+\)\]\s*\n\s*public\s+(?:readonly\s+)?(?:Sync<[^>]+>|AssetRef<[^>]+>)\s+(\w+)/g;
-      let rangeMatch: RegExpExecArray | null;
-      while ((rangeMatch = rangePattern.exec(content)) !== null) {
-        const member = info.members.find(m => m.name === rangeMatch![1]);
-        if (member) {
-          member.attributes = member.attributes || [];
-          member.attributes.push('Range');
-        }
-      }
-
-      this.componentCache.set(filePath, info);
-      return info;
-    } catch (e) {
+    } catch (error) {
+      console.warn(`Failed to parse file ${filePath}:`, error);
       return null;
     }
   }
 
-  /**
-   * Format component info for display
-   */
   formatComponentInfo(info: ComponentInfo): string {
-    let result = `=== ${info.name} ===\n`;
-    if (info.category) result += `Category: ${info.category}\n`;
-    if (info.baseClass) result += `Base: ${info.baseClass}\n`;
-    if (info.interfaces?.length) result += `Interfaces: ${info.interfaces.join(', ')}\n`;
+    let output = `Component: ${info.name}\n`;
+    if (info.category) output += `Category: ${info.category}\n`;
+    if (info.baseClass) output += `Base Class: ${info.baseClass}\n`;
+    output += `File: ${info.file}\n`;
+    
     if (info.members.length > 0) {
-      result += `\nMembers:\n`;
+      output += 'Members:\n';
       for (const member of info.members) {
-        const attrs = member.attributes ? ` [${member.attributes.join(', ')}]` : '';
-        result += `  - ${member.name}: ${member.type}${attrs}\n`;
+        output += `  - ${member.name} (${member.type})\n`;
       }
+    } else {
+      output += 'No Sync members found (or failed to parse).\n';
     }
-    return result;
+    
+    return output;
   }
 }
-
-// Export default instance
-export const decompileSearch = new DecompileSearch();
