@@ -190,6 +190,34 @@ await client.updateComponent({
 });
 ```
 
+## 制限事項: ProtoFlux コンポーネント
+
+ResoniteLink モッドの制限により、**ProtoFlux コンポーネントは追加できません**。
+
+### 原因
+
+ProtoFlux コンポーネントはジェネリック型（例: `ValueInput<int>`, `ValueAddMulti<int>`）であり、ResoniteLink の型解決がこれらの型を解決できません。
+
+### 試行した形式（すべて失敗）
+
+```
+FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>
+FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput`1[System.Int32]
+[FrooxEngine]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>
+[ProtoFlux.Nodes.FrooxEngine]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput`1[System.Int32]
+```
+
+### 動作するもの
+
+- 既存の ProtoFlux コンポーネントの**読み取り**は可能
+- 非ジェネリック型コンポーネント（BoxMesh, PBS_Metallic など）の追加は可能
+
+### 回避策
+
+- Resonite 内で手動で ProtoFlux を作成
+- 既存の ProtoFlux をテンプレートとして複製
+- PackedObject として保存したものをインポート
+
 ## デコンパイル検索 (CLI)
 
 ```bash
