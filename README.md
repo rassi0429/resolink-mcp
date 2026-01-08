@@ -330,30 +330,60 @@ await client.updateComponent({
 - `id` フィールドを指定すると、その ID を持つ既存要素が更新される
 - 1回目で `targetId` を指定しても無視され、null になる
 
-## 制限事項: ProtoFlux コンポーネント
+## ProtoFlux コンポーネントの追加
 
-ResoniteLink モッドの制限により、**ProtoFlux コンポーネントは追加できません**。
+ProtoFlux ノード（ジェネリック型コンポーネント）を追加するには、特定の形式が必要です。
 
-### 原因
-
-ProtoFlux コンポーネントはジェネリック型（例: `ValueInput<int>`, `ValueAddMulti<int>`）であり、ResoniteLink の型解決がこれらの型を解決できません。
-
-### 試行した形式（すべて失敗）
+### 正しい形式
 
 ```
-FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>
-FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput`1[System.Int32]
-[FrooxEngine]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>
-[ProtoFlux.Nodes.FrooxEngine]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput`1[System.Int32]
+[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.<コンポーネント名><型>
 ```
 
-### 動作するもの
+#### ポイント
 
-- 既存の ProtoFlux コンポーネントの**読み取り**は可能
-- 非ジェネリック型コンポーネント（BoxMesh, PBS_Metallic など）の追加は可能
+| 項目 | 正しい形式 | 間違った形式 |
+|------|-----------|-------------|
+| アセンブリ名 | `[ProtoFluxBindings]` | `[FrooxEngine]` |
+| 名前空間 | `FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes` | `FrooxEngine.ProtoFlux.CoreNodes` |
+| ジェネリック型 | `<bool>`, `<int>`, `<float>` | `<System.Boolean>`, `` `1[System.Boolean] `` |
 
-### 回避策
+- **名前空間**: `FrooxEngine` が2回繰り返される
+- **型指定**: C# エイリアス（`bool`, `int`, `float`）を使用する（`System.Boolean` ではない）
+- **記法**: `<>` 形式を使用する（.NET のバッククォート記法 `` `1[...] `` ではない）
 
+### 動作例
+
+```typescript
+// ValueFieldDrive<bool> を追加
+await client.addComponent({
+  containerSlotId: slotId,
+  componentType: '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueFieldDrive<bool>'
+});
+
+// GlobalValue<float> を追加
+await client.addComponent({
+  containerSlotId: slotId,
+  componentType: '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalValue<float>'
+});
+```
+
+### よく使う ProtoFlux ノード
+
+| コンポーネント | 用途 |
+|--------------|------|
+| `ValueFieldDrive<T>` | フィールドをドライブ |
+| `ReferenceFieldDrive<T>` | 参照フィールドをドライブ |
+| `GlobalValue<T>` | グローバル値 |
+| `GlobalReference<T>` | グローバル参照 |
+
+### 制限事項
+
+一部の ProtoFlux ノードは追加できない場合があります：
+- 複雑なジェネリック制約を持つノード
+- 特殊な初期化が必要なノード
+
+回避策：
 - Resonite 内で手動で ProtoFlux を作成
 - 既存の ProtoFlux をテンプレートとして複製
 - PackedObject として保存したものをインポート
