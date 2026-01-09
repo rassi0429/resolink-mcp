@@ -49,8 +49,18 @@
 
 **ポイント**:
 - `[ProtoFluxBindings]` プレフィックスが必須
-- 型は C# エイリアス (`int`, `float`, `bool`) を使用
+- プリミティブ型は C# エイリアス (`int`, `float`, `bool`, `colorX`) を使用
 - `<>` 記法を使用（バッククォート記法 `` `1[...] `` は不可）
+
+### オブジェクト型のジェネリックパラメータ
+
+`Slot`や`User`などのオブジェクト型をジェネリックパラメータに使う場合、**型パラメータにもアセンブリ修飾名が必要**:
+```
+[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.RefObjectInput<[FrooxEngine]FrooxEngine.Slot>
+[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.RefObjectInput<[FrooxEngine]FrooxEngine.User>
+```
+
+**形式**: `<[Assembly]Namespace.Type>`
 
 ---
 
@@ -70,6 +80,7 @@
 | ProtoFlux | ValueDisplay\<int\> | `[ProtoFluxBindings]...ValueDisplay<int>` |
 | ProtoFlux | ValueFieldDrive\<colorX\> | `[ProtoFluxBindings]...ValueFieldDrive<colorX>` |
 | ProtoFlux | FieldDriveBase+Proxy | `FrooxEngine.ProtoFlux.CoreNodes.FieldDriveBase<colorX>+Proxy` |
+| ProtoFlux | RefObjectInput\<Slot\> | `[ProtoFluxBindings]...RefObjectInput<[FrooxEngine]FrooxEngine.Slot>` |
 
 ---
 
