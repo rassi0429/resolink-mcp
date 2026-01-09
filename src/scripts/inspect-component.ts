@@ -1,4 +1,4 @@
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 async function main() {
   const url = process.argv[2] || 'ws://localhost:31541';

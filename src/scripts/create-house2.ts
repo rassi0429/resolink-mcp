@@ -1,4 +1,4 @@
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 async function createBox(
   client: ResoniteLinkClient,

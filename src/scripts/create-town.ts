@@ -1,4 +1,4 @@
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 // Convert Euler angles (degrees) to quaternion
 function eulerToQuaternion(yaw: number): { x: number; y: number; z: number; w: number } {

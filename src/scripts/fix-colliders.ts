@@ -1,4 +1,4 @@
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 async function enableCharacterColliders(client: ResoniteLinkClient, slotId: string, depth: number = 0): Promise<number> {
   let count = 0;

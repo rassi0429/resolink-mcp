@@ -1,4 +1,4 @@
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 // === COLORS ===
 const CONCRETE = { r: 0.5, g: 0.5, b: 0.48 };

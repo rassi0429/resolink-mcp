@@ -5,7 +5,7 @@
  *
  * 使い方: npx tsx src/scripts/create-flux-add.ts [ws://localhost:58971]
  */
-import { ResoniteLinkClient } from '../index.js';
+import { ResoniteLinkClient } from '../client.js';
 
 const WS_URL = process.argv[2] || 'ws://localhost:58971';
 
