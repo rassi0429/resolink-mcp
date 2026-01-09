@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["C:/Users/neo/GitHub/resolink_mcp/dist/mcp-server.js"],
       "env": {
-        "RESONITE_WS_URL": "ws://localhost:58971"
+        "RESONITE_WS_URL": "ws://localhost:3343"
       }
     },
     "resonite-camera": {

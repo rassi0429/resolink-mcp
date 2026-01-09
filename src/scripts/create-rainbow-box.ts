@@ -217,7 +217,7 @@ async function main() {
 
     // 14. マテリアルの EmissiveColor フィールドをドライブ
     // まず PBS_Metallic の詳細を取得して EmissiveColor フィールドIDを探す
-    const materialDetail = await client.getComponent({ componentId: material.id });
+    const materialDetail = await client.getComponent(material.id!);
     console.log('  Material members:', Object.keys(materialDetail.data?.members || {}));
 
     // Drive の DriveTarget にフィールド参照を設定

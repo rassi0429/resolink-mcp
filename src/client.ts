@@ -6,6 +6,7 @@ import {
   Response,
   SlotDataResponse,
   ComponentDataResponse,
+  AssetDataResponse,
   GetSlotMessage,
   AddSlotMessage,
   UpdateSlotMessage,
@@ -14,6 +15,8 @@ import {
   AddComponentMessage,
   UpdateComponentMessage,
   RemoveComponentMessage,
+  ImportTexture2DFileMessage,
+  ImportTexture2DRawDataMessage,
   Slot,
   Component,
   GetSlotOptions,
@@ -21,6 +24,8 @@ import {
   UpdateSlotOptions,
   AddComponentOptions,
   UpdateComponentOptions,
+  ImportTexture2DFileOptions,
+  ImportTexture2DRawDataOptions,
   ROOT_SLOT_ID,
 } from './types.js';
 
@@ -177,7 +182,7 @@ export class ResoniteLinkClient {
     this.pendingRequests.clear();
   }
 
-  private async sendMessage<T extends Response>(message: Message): Promise<T> {
+  private async sendMessage<T extends Response>(message: Message, binaryPayload?: Buffer): Promise<T> {
     if (!this.ws || !this.isConnected) {
       this.logError('Send failed - not connected', message.$type);
       throw new Error('Not connected');
@@ -189,6 +194,8 @@ export class ResoniteLinkClient {
     if ('componentType' in message) logMessage.componentType = (message as any).componentType;
     if ('containerSlotId' in message) logMessage.containerSlotId = (message as any).containerSlotId;
     if ('id' in message) logMessage.id = (message as any).id;
+    if ('filePath' in message) logMessage.filePath = (message as any).filePath;
+    if (binaryPayload) logMessage.binaryPayloadSize = binaryPayload.length;
     this.log('SEND', logMessage);
 
     return new Promise((resolve, reject) => {
@@ -213,12 +220,26 @@ export class ResoniteLinkClient {
         },
       });
 
+      // Send JSON message
       this.ws!.send(JSON.stringify(message), (error) => {
         if (error) {
           clearTimeout(timeoutId);
           this.logError('Send error', error);
           this.pendingRequests.delete(message.messageId);
           reject(error);
+          return;
+        }
+
+        // Send binary payload if present (immediately after JSON message)
+        if (binaryPayload) {
+          this.ws!.send(binaryPayload, (binaryError) => {
+            if (binaryError) {
+              clearTimeout(timeoutId);
+              this.logError('Binary payload send error', binaryError);
+              this.pendingRequests.delete(message.messageId);
+              reject(binaryError);
+            }
+          });
         }
       });
     });
@@ -384,6 +405,42 @@ export class ResoniteLinkClient {
     };
 
     return this.sendMessage<Response>(message);
+  }
+
+  // ============================================
+  // Asset Import API
+  // ============================================
+
+  /**
+   * Import a texture from a file on the local file system (Resonite host).
+   * The file must be in a format supported by Resonite (PNG, JPG, etc.).
+   * @returns AssetDataResponse with the assetURL that can be assigned to static asset providers
+   */
+  async importTexture2DFile(options: ImportTexture2DFileOptions): Promise<AssetDataResponse> {
+    const message: ImportTexture2DFileMessage = {
+      $type: 'importTexture2DFile',
+      messageId: uuidv4(),
+      filePath: options.filePath,
+    };
+
+    return this.sendMessage<AssetDataResponse>(message);
+  }
+
+  /**
+   * Import a texture from raw pixel data.
+   * The raw data should be in RGBA format (4 bytes per pixel).
+   * @returns AssetDataResponse with the assetURL that can be assigned to static asset providers
+   */
+  async importTexture2DRawData(options: ImportTexture2DRawDataOptions): Promise<AssetDataResponse> {
+    const message: ImportTexture2DRawDataMessage = {
+      $type: 'importTexture2DRawData',
+      messageId: uuidv4(),
+      width: options.width,
+      height: options.height,
+      colorProfile: options.colorProfile ?? 'sRGB',
+    };
+
+    return this.sendMessage<AssetDataResponse>(message, options.rawData);
   }
 
   // ============================================

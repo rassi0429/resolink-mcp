@@ -273,4 +273,34 @@ export interface UpdateComponentOptions {
   members?: Record<string, Member>;
 }
 
+// ============================================
+// Asset Import Options
+// ============================================
+
+export interface ImportTexture2DFileOptions {
+  /**
+   * Path of the texture file to import (local file system path on the Resonite host)
+   */
+  filePath: string;
+}
+
+export interface ImportTexture2DRawDataOptions {
+  /**
+   * Width of the texture
+   */
+  width: number;
+  /**
+   * Height of the texture
+   */
+  height: number;
+  /**
+   * Color profile (e.g., 'sRGB', 'Linear')
+   */
+  colorProfile?: string;
+  /**
+   * Raw pixel data (RGBA format, 4 bytes per pixel)
+   */
+  rawData: Buffer;
+}
+
 export const ROOT_SLOT_ID = 'Root';
