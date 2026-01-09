@@ -83,6 +83,7 @@
 | ProtoFlux | RefObjectInput\<Slot\> | `[ProtoFluxBindings]...RefObjectInput<[FrooxEngine]FrooxEngine.Slot>` |
 | ProtoFlux | DynamicImpulseReceiver | `[ProtoFluxBindings]...Actions.DynamicImpulseReceiver` |
 | ProtoFlux | DuplicateSlot | `[ProtoFluxBindings]...FrooxEngine.Slots.DuplicateSlot` |
+| ProtoFlux | ObjectFieldDrive\<string\> | `[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>` |
 | UIX | Canvas | `[FrooxEngine]FrooxEngine.UIX.Canvas` |
 | UIX | RectTransform | `[FrooxEngine]FrooxEngine.UIX.RectTransform` |
 | UIX | Text | `[FrooxEngine]FrooxEngine.UIX.Text` |
@@ -318,6 +319,24 @@ main();
 ---
 
 ## ProtoFlux スクリプトの書き方
+
+### 重要: スロット構成ルール
+
+**1スロットに1つのProtoFluxコンポーネントのみ**
+
+- ProtoFluxノードは他のコンポーネント（UIX、Mesh等）と混ぜない
+- 「Flux」という親スロットを作り、その下にProtoFluxスロットを配置
+
+```
+MyObject (Grabbable)
+├── Flux (ProtoFlux親スロット)
+│   ├── Input1 (ValueInput<int>)
+│   ├── Input2 (ValueInput<int>)
+│   ├── Add (ValueAdd<int>)
+│   └── Display (ValueDisplay<int>)
+├── Button (BoxMesh, MeshRenderer, PBS_Metallic, BoxCollider, PhysicalButton)
+└── UIX (Canvas, RectTransform, Text)
+```
 
 ### 基本パターン
 

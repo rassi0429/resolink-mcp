@@ -35,42 +35,79 @@ async function main() {
       componentType: '[FrooxEngine]FrooxEngine.Grabbable',
     });
 
-    // Create child slots for each node
-    const nodePositions = [
+    // Create Flux parent slot (contains all ProtoFlux nodes)
+    await client.addSlot({
+      parentId: containerId,
+      name: 'Flux',
+      position: { x: 0, y: 0, z: 0 },
+      isActive: true,
+    });
+    const fluxParentData = await client.getSlot({ slotId: containerId, depth: 1, includeComponentData: false });
+    const fluxParent = fluxParentData.data?.children?.find(c => c.name?.value === 'Flux');
+    if (!fluxParent?.id) throw new Error('Failed to create Flux parent slot');
+    const fluxParentId = fluxParent.id;
+
+    // Create ProtoFlux node slots (1 component per slot)
+    const fluxNodes = [
       { name: 'UrlInput', x: -0.5, y: 0.1, z: 0 },
-      { name: 'Button', x: -0.5, y: -0.15, z: 0 },
       { name: 'ButtonEvents', x: -0.2, y: 0.05, z: 0 },
+      { name: 'GlobalRef', x: -0.2, y: -0.05, z: 0 },
       { name: 'StartAsync', x: -0.05, y: 0.05, z: 0 },
       { name: 'WebRequest', x: 0.1, y: 0.05, z: 0 },
       { name: 'Store', x: 0.25, y: 0.1, z: 0 },
       { name: 'Write', x: 0.25, y: -0.05, z: 0 },
-      // Display is now on Store slot (same slot as DataModelObjectFieldStore)
+      { name: 'FieldDrive', x: 0.4, y: 0, z: 0 },
     ];
 
-    for (const node of nodePositions) {
+    for (const node of fluxNodes) {
       await client.addSlot({
-        parentId: containerId,
+        parentId: fluxParentId,
         name: node.name,
         position: { x: node.x, y: node.y, z: node.z },
         isActive: true,
       });
     }
-    console.log('  Created child slots');
+    console.log('  Created Flux child slots');
+
+    // Create Button slot (non-ProtoFlux: mesh, collider, PhysicalButton)
+    await client.addSlot({
+      parentId: containerId,
+      name: 'Button',
+      position: { x: -0.5, y: -0.15, z: 0 },
+      isActive: true,
+    });
+
+    // Create Display slot (UIX only: Canvas, RectTransform, Text)
+    await client.addSlot({
+      parentId: containerId,
+      name: 'Display',
+      position: { x: 0.5, y: 0, z: 0 },
+      isActive: true,
+    });
+    console.log('  Created Button and Display slots');
 
     // Get slot IDs
     const containerData = await client.getSlot({ slotId: containerId, depth: 1, includeComponentData: false });
-    const children = containerData.data?.children || [];
+    const containerChildren = containerData.data?.children || [];
+    const buttonSlot = containerChildren.find(c => c.name?.value === 'Button');
+    const displaySlot = containerChildren.find(c => c.name?.value === 'Display');
 
-    const urlInputSlot = children.find(c => c.name?.value === 'UrlInput');
-    const buttonSlot = children.find(c => c.name?.value === 'Button');
-    const buttonEventsSlot = children.find(c => c.name?.value === 'ButtonEvents');
-    const startAsyncSlot = children.find(c => c.name?.value === 'StartAsync');
-    const webRequestSlot = children.find(c => c.name?.value === 'WebRequest');
-    const storeSlot = children.find(c => c.name?.value === 'Store');
-    const writeSlot = children.find(c => c.name?.value === 'Write');
+    // Get Flux child slots
+    const fluxData = await client.getSlot({ slotId: fluxParentId, depth: 1, includeComponentData: false });
+    const fluxChildren = fluxData.data?.children || [];
 
-    if (!urlInputSlot?.id || !buttonSlot?.id || !buttonEventsSlot?.id || !startAsyncSlot?.id ||
-        !webRequestSlot?.id || !storeSlot?.id || !writeSlot?.id) {
+    const urlInputSlot = fluxChildren.find(c => c.name?.value === 'UrlInput');
+    const buttonEventsSlot = fluxChildren.find(c => c.name?.value === 'ButtonEvents');
+    const globalRefSlot = fluxChildren.find(c => c.name?.value === 'GlobalRef');
+    const startAsyncSlot = fluxChildren.find(c => c.name?.value === 'StartAsync');
+    const webRequestSlot = fluxChildren.find(c => c.name?.value === 'WebRequest');
+    const storeSlot = fluxChildren.find(c => c.name?.value === 'Store');
+    const writeSlot = fluxChildren.find(c => c.name?.value === 'Write');
+    const fieldDriveSlot = fluxChildren.find(c => c.name?.value === 'FieldDrive');
+
+    if (!urlInputSlot?.id || !buttonSlot?.id || !displaySlot?.id || !buttonEventsSlot?.id ||
+        !globalRefSlot?.id || !startAsyncSlot?.id || !webRequestSlot?.id || !storeSlot?.id ||
+        !writeSlot?.id || !fieldDriveSlot?.id) {
       throw new Error('Failed to find child slots');
     }
 
@@ -83,7 +120,7 @@ async function main() {
     });
     console.log('  Added ValueObjectInput<Uri>');
 
-    // 2. Physical Button (visual + interaction)
+    // 2. Physical Button (visual + interaction) - non-ProtoFlux
     await client.addComponent({
       containerSlotId: buttonSlot.id,
       componentType: '[FrooxEngine]FrooxEngine.BoxMesh',
@@ -112,17 +149,19 @@ async function main() {
     });
     console.log('  Added Button with PhysicalButton');
 
-    // 3. ButtonEvents (ProtoFlux node)
+    // 3. ButtonEvents (ProtoFlux node - separate slot)
     await client.addComponent({
       containerSlotId: buttonEventsSlot.id,
       componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Interaction.ButtonEvents',
     });
-    // Add GlobalReference<IButton> for ButtonEvents.Button input
+    console.log('  Added ButtonEvents');
+
+    // 4. GlobalReference<IButton> (separate slot)
     await client.addComponent({
-      containerSlotId: buttonEventsSlot.id,
+      containerSlotId: globalRefSlot.id,
       componentType: '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IButton>',
     });
-    console.log('  Added ButtonEvents + GlobalReference<IButton>');
+    console.log('  Added GlobalReference<IButton>');
 
     // 4. StartAsyncTask (bridge between sync and async)
     await client.addComponent({
@@ -152,22 +191,40 @@ async function main() {
     });
     console.log('  Added ObjectWrite<FrooxEngineContext, string>');
 
-    // 8. ObjectDisplay<string> on Store slot (to read from DataModelObjectFieldStore)
+    // 8. ObjectFieldDrive<string> (separate ProtoFlux slot)
     await client.addComponent({
-      containerSlotId: storeSlot.id,
-      componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectDisplay<string>',
+      containerSlotId: fieldDriveSlot.id,
+      componentType: '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>',
     });
-    console.log('  Added ObjectDisplay<string> on Store slot');
+    console.log('  Added ObjectFieldDrive<string>');
+
+    // 9. UIX Display (Canvas + Text, non-ProtoFlux)
+    await client.addComponent({
+      containerSlotId: displaySlot.id,
+      componentType: '[FrooxEngine]FrooxEngine.UIX.Canvas',
+    });
+    await client.addComponent({
+      containerSlotId: displaySlot.id,
+      componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform',
+    });
+    await client.addComponent({
+      containerSlotId: displaySlot.id,
+      componentType: '[FrooxEngine]FrooxEngine.UIX.Text',
+    });
+    console.log('  Added UIX Canvas + Text');
 
     // ============ Get component IDs ============
-    const [urlInputData, buttonData, buttonEventsData, startAsyncData, webRequestData, storeData, writeData] = await Promise.all([
+    const [urlInputData, buttonData, buttonEventsData, globalRefData, startAsyncData, webRequestData, storeData, writeData, fieldDriveData, displayData] = await Promise.all([
       client.getSlot({ slotId: urlInputSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: buttonSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: buttonEventsSlot.id, depth: 0, includeComponentData: true }),
+      client.getSlot({ slotId: globalRefSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: startAsyncSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: webRequestSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: storeSlot.id, depth: 0, includeComponentData: true }),
       client.getSlot({ slotId: writeSlot.id, depth: 0, includeComponentData: true }),
+      client.getSlot({ slotId: fieldDriveSlot.id, depth: 0, includeComponentData: true }),
+      client.getSlot({ slotId: displaySlot.id, depth: 0, includeComponentData: true }),
     ]);
 
     const urlInputComp = urlInputData.data?.components?.find(c => c.componentType?.includes('ValueObjectInput'));
@@ -175,17 +232,20 @@ async function main() {
     const meshRenderer = buttonData.data?.components?.find(c => c.componentType?.includes('MeshRenderer'));
     const material = buttonData.data?.components?.find(c => c.componentType?.includes('PBS_Metallic'));
     const physicalButton = buttonData.data?.components?.find(c => c.componentType?.includes('PhysicalButton'));
-    const buttonEventsComp = buttonEventsData.data?.components?.find(c => c.componentType?.includes('ButtonEvents') && !c.componentType?.includes('GlobalReference'));
-    const globalRefComp = buttonEventsData.data?.components?.find(c => c.componentType?.includes('GlobalReference'));
+    const buttonEventsComp = buttonEventsData.data?.components?.find(c => c.componentType?.includes('ButtonEvents'));
+    const globalRefComp = globalRefData.data?.components?.find(c => c.componentType?.includes('GlobalReference'));
     const startAsyncComp = startAsyncData.data?.components?.find(c => c.componentType?.includes('StartAsyncTask'));
     const webRequestComp = webRequestData.data?.components?.find(c => c.componentType?.includes('GET_String'));
     const storeComp = storeData.data?.components?.find(c => c.componentType?.includes('DataModelObjectFieldStore'));
     const writeComp = writeData.data?.components?.find(c => c.componentType?.includes('ObjectWrite'));
-    // ObjectDisplay is on the same slot as DataModelObjectFieldStore
-    const displayComp = storeData.data?.components?.find(c => c.componentType?.includes('ObjectDisplay'));
+    const fieldDriveComp = fieldDriveData.data?.components?.find(c => c.componentType?.includes('ObjectFieldDrive'));
+    // UIX components
+    const canvasComp = displayData.data?.components?.find(c => c.componentType?.includes('Canvas'));
+    const textComp = displayData.data?.components?.find(c => c.componentType === 'FrooxEngine.UIX.Text');
 
     if (!urlInputComp?.id || !buttonEventsComp?.id || !globalRefComp?.id || !physicalButton?.id ||
-        !startAsyncComp?.id || !webRequestComp?.id || !storeComp?.id || !writeComp?.id || !displayComp?.id) {
+        !startAsyncComp?.id || !webRequestComp?.id || !storeComp?.id || !writeComp?.id ||
+        !fieldDriveComp?.id || !textComp?.id) {
       console.log('Components found:', {
         urlInputComp: urlInputComp?.id,
         buttonEventsComp: buttonEventsComp?.id,
@@ -195,7 +255,8 @@ async function main() {
         webRequestComp: webRequestComp?.id,
         storeComp: storeComp?.id,
         writeComp: writeComp?.id,
-        displayComp: displayComp?.id,
+        fieldDriveComp: fieldDriveComp?.id,
+        textComp: textComp?.id,
       });
       throw new Error('Failed to find components');
     }
@@ -285,12 +346,17 @@ async function main() {
     });
     console.log('  Connected DataModelObjectFieldStore to ObjectWrite.Variable');
 
-    // Connect ObjectDisplay.Input <- DataModelObjectFieldStore (reads from persistent store)
+    // Connect ObjectFieldDrive.Value <- DataModelObjectFieldStore (reads from persistent store)
     await client.updateComponent({
-      id: displayComp.id,
-      members: { Input: { $type: 'reference', targetId: storeComp.id } } as any,
+      id: fieldDriveComp.id,
+      members: { Value: { $type: 'reference', targetId: storeComp.id } } as any,
     });
-    console.log('  Connected DataModelObjectFieldStore to ObjectDisplay.Input');
+    console.log('  Connected DataModelObjectFieldStore to ObjectFieldDrive.Value');
+
+    // Note: ObjectFieldDrive.Drive -> Text.Content must be connected manually
+    // Drag Text.Content field to ObjectFieldDrive.Drive in Resonite
+    console.log('  [Manual] Connect ObjectFieldDrive.Drive to Text.Content');
+    console.log('  [Manual] Configure Canvas size and Text appearance');
 
     // Connect GET_String.OnResponse -> ObjectWrite (impulse)
     if (onResponseId) {
