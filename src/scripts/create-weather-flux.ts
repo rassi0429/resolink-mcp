@@ -353,10 +353,30 @@ async function main() {
     });
     console.log('  Connected DataModelObjectFieldStore to ObjectFieldDrive.Value');
 
-    // Note: ObjectFieldDrive.Drive -> Text.Content must be connected manually
-    // Drag Text.Content field to ObjectFieldDrive.Drive in Resonite
-    console.log('  [Manual] Connect ObjectFieldDrive.Drive to Text.Content');
-    console.log('  [Manual] Configure Canvas size and Text appearance');
+    // Find FieldDriveBase+Proxy component (auto-created with ObjectFieldDrive)
+    const proxyComp = fieldDriveData.data?.components?.find(c => c.componentType?.includes('Proxy'));
+    if (!proxyComp?.id) {
+      console.log('  [Warning] Proxy component not found, Drive connection skipped');
+    } else {
+      // Get Text.Content field ID
+      const textDetails = await client.getComponent(textComp.id);
+      const contentFieldId = (textDetails.data?.members as any)?.Content?.id;
+
+      if (contentFieldId) {
+        // Get Proxy.Drive member ID
+        const proxyDetails = await client.getComponent(proxyComp.id);
+        const driveId = (proxyDetails.data?.members as any)?.Drive?.id;
+
+        if (driveId) {
+          // Connect Proxy.Drive -> Text.Content
+          await client.updateComponent({
+            id: proxyComp.id,
+            members: { Drive: { $type: 'reference', id: driveId, targetId: contentFieldId } } as any,
+          });
+          console.log('  Connected ObjectFieldDrive.Drive to Text.Content');
+        }
+      }
+    }
 
     // Connect GET_String.OnResponse -> ObjectWrite (impulse)
     if (onResponseId) {

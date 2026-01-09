@@ -84,6 +84,7 @@
 | ProtoFlux | DynamicImpulseReceiver | `[ProtoFluxBindings]...Actions.DynamicImpulseReceiver` |
 | ProtoFlux | DuplicateSlot | `[ProtoFluxBindings]...FrooxEngine.Slots.DuplicateSlot` |
 | ProtoFlux | ObjectFieldDrive\<string\> | `[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>` |
+| ProtoFlux | FieldDriveBase+Proxy | ObjectFieldDrive追加時に自動生成。Driveメンバーはこちらにある |
 | UIX | Canvas | `[FrooxEngine]FrooxEngine.UIX.Canvas` |
 | UIX | RectTransform | `[FrooxEngine]FrooxEngine.UIX.RectTransform` |
 | UIX | Text | `[FrooxEngine]FrooxEngine.UIX.Text` |
@@ -435,6 +436,42 @@ await client.updateComponent({
 |------------|---------|
 | 単一出力（ValueInput, ValueAdd等） | コンポーネントIDを直接参照 |
 | 複数出力（GlobalTransform等） | 出力メンバーのIDを個別に参照 |
+
+### ObjectFieldDrive の接続（フィールドドライブ）
+
+ObjectFieldDrive<T>を追加すると、`FieldDriveBase<T>+Proxy` コンポーネントが**自動生成**される。
+Driveメンバーは**Proxy側**にある。
+
+```typescript
+// 1. ObjectFieldDrive追加
+await client.addComponent({
+  containerSlotId: fieldDriveSlot.id,
+  componentType: '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>',
+});
+
+// 2. コンポーネント取得（ObjectFieldDriveとProxyの両方が存在）
+const slotData = await client.getSlot({ slotId: fieldDriveSlot.id, includeComponentData: true });
+const fieldDriveComp = slotData.data?.components?.find(c => c.componentType?.includes('ObjectFieldDrive'));
+const proxyComp = slotData.data?.components?.find(c => c.componentType?.includes('Proxy'));
+
+// 3. Value入力を接続（ObjectFieldDrive側）
+await client.updateComponent({
+  id: fieldDriveComp.id,
+  members: { Value: { $type: 'reference', targetId: sourceComp.id } } as any,
+});
+
+// 4. Drive出力を接続（Proxy側）
+const textDetails = await client.getComponent(textComp.id);
+const contentFieldId = textDetails.data.members.Content.id;  // ドライブ対象フィールドのID
+
+const proxyDetails = await client.getComponent(proxyComp.id);
+const driveId = proxyDetails.data.members.Drive.id;
+
+await client.updateComponent({
+  id: proxyComp.id,
+  members: { Drive: { $type: 'reference', id: driveId, targetId: contentFieldId } } as any,
+});
+```
 
 ---
 
