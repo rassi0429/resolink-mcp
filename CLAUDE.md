@@ -929,6 +929,7 @@ await client.updateComponent({
 - HSV_ToColorX は S, V 入力が null だと色が出ない（要 ValueInput 接続）
 - Wiggler は floatQ（回転）のみ対応、float3（位置）は不可
 - DataModelObjectFieldStoreを使う場合はFrooxEngineContext版のObjectWriteが必要
+- **ProtoFluxノードはスクリプトで作成後、スロットを一度非アクティブ→アクティブにして初期化が必要**（複製時は自動で初期化される）
 
 ---
 
