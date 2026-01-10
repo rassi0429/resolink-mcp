@@ -46,7 +46,7 @@ async function addActivationToFlux(client: ResoniteLinkClient, diceName: string,
   }
 
   // UserFieldスロットのコンポーネントを取得
-  const userFieldData = await client.getSlot({ slotId: userFieldSlot.id, includeComponentData: true });
+  const userFieldData = await client.getSlot({ slotId: userFieldSlot.id!, includeComponentData: true });
   const refSourceComp = userFieldData.data?.components?.find((c: any) =>
     c.componentType?.includes('ReferenceSource') && c.componentType?.includes('User')
   );
@@ -57,7 +57,7 @@ async function addActivationToFlux(client: ResoniteLinkClient, diceName: string,
   console.log(`  ReferenceSource<User>: ${refSourceComp.id}`);
 
   // StartAsyncTaskスロットのコンポーネントを取得
-  const startAsyncData = await client.getSlot({ slotId: startAsyncSlot.id, includeComponentData: true });
+  const startAsyncData = await client.getSlot({ slotId: startAsyncSlot.id!, includeComponentData: true });
   const startAsyncComp = startAsyncData.data?.components?.find((c: any) =>
     c.componentType?.includes('StartAsyncTask')
   );
@@ -95,19 +95,19 @@ async function addActivationToFlux(client: ResoniteLinkClient, diceName: string,
 
   // 3. コンポーネントを追加
   await client.addComponent({
-    containerSlotId: activateTagSlot.id,
+    containerSlotId: activateTagSlot.id!,
     componentType: '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalValue<string>',
   });
   await client.addComponent({
-    containerSlotId: dynamicReceiverSlot.id,
+    containerSlotId: dynamicReceiverSlot.id!,
     componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver',
   });
   await client.addComponent({
-    containerSlotId: activateLocalUserSlot.id,
+    containerSlotId: activateLocalUserSlot.id!,
     componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Users.LocalUser',
   });
   await client.addComponent({
-    containerSlotId: activateWriteSlot.id,
+    containerSlotId: activateWriteSlot.id!,
     componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,[FrooxEngine]FrooxEngine.User>',
   });
 
@@ -116,10 +116,10 @@ async function addActivationToFlux(client: ResoniteLinkClient, diceName: string,
 
   // コンポーネントIDを取得
   const [tagData, receiverData, localUserData, writeData] = await Promise.all([
-    client.getSlot({ slotId: activateTagSlot.id, includeComponentData: true }),
-    client.getSlot({ slotId: dynamicReceiverSlot.id, includeComponentData: true }),
-    client.getSlot({ slotId: activateLocalUserSlot.id, includeComponentData: true }),
-    client.getSlot({ slotId: activateWriteSlot.id, includeComponentData: true }),
+    client.getSlot({ slotId: activateTagSlot.id!, includeComponentData: true }),
+    client.getSlot({ slotId: dynamicReceiverSlot.id!, includeComponentData: true }),
+    client.getSlot({ slotId: activateLocalUserSlot.id!, includeComponentData: true }),
+    client.getSlot({ slotId: activateWriteSlot.id!, includeComponentData: true }),
   ]);
 
   const tagComp = tagData.data?.components?.find((c: any) => c.componentType?.includes('GlobalValue'));
@@ -135,39 +135,39 @@ async function addActivationToFlux(client: ResoniteLinkClient, diceName: string,
   // 4. 値と接続を設定
   // GlobalValue<string>.Value = "ActivateDice"
   await client.updateComponent({
-    id: tagComp.id,
+    id: tagComp.id!,
     members: { Value: { $type: 'string', value: 'ActivateDice' } } as any,
   });
 
   // DynamicImpulseReceiver.Tag → GlobalValue<string>
   await client.updateComponent({
-    id: receiverComp.id,
+    id: receiverComp.id!,
     members: { Tag: { $type: 'reference', targetId: tagComp.id } } as any,
   });
 
   // DynamicImpulseReceiver.OnTriggered → ObjectWrite<User>
   await client.updateComponent({
-    id: receiverComp.id,
+    id: receiverComp.id!,
     members: { OnTriggered: { $type: 'reference', targetId: writeComp.id } } as any,
   });
 
   // ObjectWrite<User>.Value ← LocalUser
   await client.updateComponent({
-    id: writeComp.id,
+    id: writeComp.id!,
     members: { Value: { $type: 'reference', targetId: localUserComp.id } } as any,
   });
 
   // ObjectWrite<User>.Variable ← ReferenceSource<User>
   await client.updateComponent({
-    id: writeComp.id,
+    id: writeComp.id!,
     members: { Variable: { $type: 'reference', targetId: refSourceComp.id } } as any,
   });
 
   // ObjectWrite<User>.OnWritten → StartAsyncTask
-  const writeDetails = await client.getComponent(writeComp.id);
-  const onWrittenId = writeDetails.data.members.OnWritten?.id;
+  const writeDetails = await client.getComponent(writeComp.id!);
+  const onWrittenId = writeDetails.data!.members!.OnWritten?.id;
   await client.updateComponent({
-    id: writeComp.id,
+    id: writeComp.id!,
     members: { OnWritten: { $type: 'reference', id: onWrittenId, targetId: startAsyncComp.id } } as any,
   });
 

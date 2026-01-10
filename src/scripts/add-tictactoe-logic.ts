@@ -41,18 +41,18 @@ async function main() {
     // セル情報を収集
     const cells: { row: number; col: number; slotId: string; textSlotId?: string }[] = [];
     for (const rowSlot of boardSlot.children || []) {
-      const rowMatch = rowSlot.name?.match(/Row(\d)/);
+      const rowMatch = rowSlot.name?.value?.match(/Row(\d)/);
       if (!rowMatch) continue;
       const row = parseInt(rowMatch[1]);
 
       for (const cellSlot of rowSlot.children || []) {
-        const cellMatch = cellSlot.name?.match(/Cell_(\d)_(\d)/);
+        const cellMatch = cellSlot.name?.value?.match(/Cell_(\d)_(\d)/);
         if (!cellMatch) continue;
         const col = parseInt(cellMatch[2]);
 
         // テキストスロットを探す
         const textSlot = cellSlot.children?.find((c: any) => c.name === 'Text');
-        cells.push({ row, col, slotId: cellSlot.id, textSlotId: textSlot?.id });
+        cells.push({ row, col, slotId: cellSlot.id!, textSlotId: textSlot?.id });
       }
     }
     console.log(`  Found ${cells.length} cells`);
@@ -102,7 +102,7 @@ async function main() {
       cellFields.push({
         row: cells[i].row,
         col: cells[i].col,
-        fieldId: stringFields[i].id,
+        fieldId: stringFields[i].id!,
       });
     }
     console.log(`  Created ${cellFields.length} cell state fields`);
