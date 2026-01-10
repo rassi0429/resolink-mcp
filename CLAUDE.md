@@ -606,6 +606,36 @@ await client.updateComponent({
 });
 ```
 
+### ObjectFieldDrive+Proxy のタイミング問題
+
+ObjectFieldDriveを追加した直後にProxyのDrive参照を設定すると、**参照が正しく設定されないことがある**（タイミング依存で不安定）。
+
+**解決方法**: コンポーネント追加後に少し待ってから、コンポーネント情報を再取得して参照を設定する。
+
+```typescript
+// 1. ObjectFieldDrive追加
+await client.addComponent({ ... });
+
+// 2. 少し待ってからコンポーネント情報を再取得
+await new Promise(resolve => setTimeout(resolve, 100));
+const slotDataRefresh = await client.getSlot({ slotId, includeComponentData: true });
+const proxyCompRefresh = slotDataRefresh.data?.components?.find(c => c.componentType?.includes('Proxy'));
+
+// 3. 再取得したProxyコンポーネントでDrive参照を設定
+const proxyDetails = await client.getComponent(proxyCompRefresh.id);
+const driveId = proxyDetails.data.members.Drive?.id;
+
+await client.updateComponent({
+  id: proxyCompRefresh.id,
+  members: { Drive: { $type: 'reference', id: driveId, targetId: targetFieldId } } as any,
+});
+```
+
+**ポイント**:
+- 100ms程度の遅延を入れる
+- `getSlot` で `includeComponentData: true` を指定して再取得
+- 再取得したコンポーネントIDを使用して参照を設定
+
 ---
 
 ## メンバーの型一覧

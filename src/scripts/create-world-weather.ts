@@ -12,13 +12,13 @@ import { ResoniteLinkClient } from '../client.js';
 
 const WS_URL = process.argv[2] || 'ws://localhost:3343';
 
-// 都市設定
+// 都市設定（UTCからのオフセット時間）
 const CITIES = [
-  { name: '東京', query: 'Tokyo' },
-  { name: 'ニューヨーク', query: 'New+York' },
-  { name: 'ロンドン', query: 'London' },
-  { name: 'パリ', query: 'Paris' },
-  { name: 'シドニー', query: 'Sydney' },
+  { name: '東京', query: 'Tokyo', offset: 9 },
+  { name: 'ニューヨーク', query: 'New+York', offset: -5 },
+  { name: 'ロンドン', query: 'London', offset: 0 },
+  { name: 'パリ', query: 'Paris', offset: 1 },
+  { name: 'シドニー', query: 'Sydney', offset: 11 },
 ];
 
 async function main() {
@@ -209,6 +209,7 @@ async function main() {
 
     // 各都市の行を作成
     const cityTextIds: { [key: string]: string } = {};
+    const cityTimeIds: { [key: string]: string } = {};
 
     for (const city of CITIES) {
       await client.addSlot({ parentId: contentId, name: `City_${city.query}` });
@@ -271,6 +272,39 @@ async function main() {
             VerticalAlign: { $type: 'enum', value: 'Middle', enumType: 'TextVerticalAlignment' },
           } as any,
         });
+      }
+
+      // 時間表示
+      await client.addSlot({ parentId: cityId, name: 'Time' });
+      cityData = await client.getSlot({ slotId: cityId, depth: 1 });
+      const timeSlot = cityData.data?.children?.find((c: any) => c.name?.value === 'Time');
+
+      await client.addComponent({ containerSlotId: timeSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
+      await client.addComponent({ containerSlotId: timeSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.LayoutElement' });
+      await client.addComponent({ containerSlotId: timeSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.Text' });
+
+      let timeData = await client.getSlot({ slotId: timeSlot.id, includeComponentData: true });
+      const timeLayout = timeData.data?.components?.find((c: any) => c.componentType?.includes('LayoutElement'));
+      const timeText = timeData.data?.components?.find((c: any) => c.componentType?.includes('Text'));
+
+      if (timeLayout?.id) {
+        await client.updateComponent({
+          id: timeLayout.id,
+          members: { PreferredWidth: { $type: 'float', value: 80 } } as any,
+        });
+      }
+      if (timeText?.id) {
+        await client.updateComponent({
+          id: timeText.id,
+          members: {
+            Content: { $type: 'string', value: '--:--' },
+            Size: { $type: 'float', value: 18 },
+            Color: { $type: 'colorX', value: { r: 0.9, g: 0.9, b: 0.7, a: 1 } },
+            HorizontalAlign: { $type: 'enum', value: 'Center', enumType: 'TextHorizontalAlignment' },
+            VerticalAlign: { $type: 'enum', value: 'Middle', enumType: 'TextVerticalAlignment' },
+          } as any,
+        });
+        cityTimeIds[city.query] = timeText.id;
       }
 
       // 天気表示
@@ -397,17 +431,26 @@ async function main() {
 
     // Tag用のGlobalValue<string>を作成
     await client.addSlot({ parentId: fluxId, name: 'TagValue', position: { x: -1.2, y: 0.2, z: 0 } });
+    // UtcNow（共有）
+    await client.addSlot({ parentId: fluxId, name: 'UtcNow', position: { x: -1.5, y: 0.5, z: 0 } });
 
     let fluxData = await client.getSlot({ slotId: fluxId, depth: 1 });
     const tagSlot = fluxData.data?.children?.find((c: any) => c.name?.value === 'TagValue');
+    const utcNowSlot = fluxData.data?.children?.find((c: any) => c.name?.value === 'UtcNow');
 
     await client.addComponent({
       containerSlotId: tagSlot.id,
       componentType: '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalValue<string>',
     });
+    await client.addComponent({
+      containerSlotId: utcNowSlot.id,
+      componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.TimeAndDate.UtcNow',
+    });
 
     const tagData = await client.getSlot({ slotId: tagSlot.id, includeComponentData: true });
+    const utcNowData = await client.getSlot({ slotId: utcNowSlot.id, includeComponentData: true });
     const tagComp = tagData.data?.components?.find((c: any) => c.componentType?.includes('GlobalValue'));
+    const utcNowComp = utcNowData.data?.components?.find((c: any) => c.componentType?.includes('UtcNow'));
 
     // Tag値設定
     if (tagComp?.id) {
@@ -418,7 +461,7 @@ async function main() {
         } as any,
       });
     }
-    console.log('  TagValue created');
+    console.log('  TagValue & UtcNow created');
 
     // 各都市のProtoFluxノード作成
     const cityFluxData: { [key: string]: any } = {};
@@ -437,6 +480,12 @@ async function main() {
       await client.addSlot({ parentId: fluxId, name: `Drive_${city.query}`, position: { x: xOffset, y: yBase - 0.8, z: 0 } });
       await client.addSlot({ parentId: fluxId, name: `URL_${city.query}`, position: { x: xOffset - 0.15, y: yBase - 0.1, z: 0 } });
       await client.addSlot({ parentId: fluxId, name: `ToUri_${city.query}`, position: { x: xOffset, y: yBase - 0.1, z: 0 } });
+      // 時間計算用
+      await client.addSlot({ parentId: fluxId, name: `Offset_${city.query}`, position: { x: xOffset, y: yBase + 0.5, z: 0 } });
+      await client.addSlot({ parentId: fluxId, name: `TimeSpan_${city.query}`, position: { x: xOffset, y: yBase + 0.4, z: 0 } });
+      await client.addSlot({ parentId: fluxId, name: `AddTime_${city.query}`, position: { x: xOffset + 0.15, y: yBase + 0.5, z: 0 } });
+      await client.addSlot({ parentId: fluxId, name: `Format_${city.query}`, position: { x: xOffset + 0.3, y: yBase + 0.5, z: 0 } });
+      await client.addSlot({ parentId: fluxId, name: `TimeDrive_${city.query}`, position: { x: xOffset + 0.45, y: yBase + 0.5, z: 0 } });
     }
 
     fluxData = await client.getSlot({ slotId: fluxId, depth: 1 });
@@ -452,6 +501,12 @@ async function main() {
       const driveSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `Drive_${city.query}`);
       const urlSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `URL_${city.query}`);
       const toUriSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `ToUri_${city.query}`);
+      // 時間計算用スロット
+      const offsetSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `Offset_${city.query}`);
+      const timeSpanSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `TimeSpan_${city.query}`);
+      const addTimeSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `AddTime_${city.query}`);
+      const formatSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `Format_${city.query}`);
+      const timeDriveSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `TimeDrive_${city.query}`);
 
       // コンポーネント追加
       await client.addComponent({
@@ -486,9 +541,31 @@ async function main() {
         containerSlotId: toUriSlot.id,
         componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Utility.Uris.StringToAbsoluteURI',
       });
+      // 時間計算用コンポーネント
+      await client.addComponent({
+        containerSlotId: offsetSlot.id,
+        componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<double>',
+      });
+      await client.addComponent({
+        containerSlotId: timeSpanSlot.id,
+        componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.TimeAndDate.TimeSpanFromHours',
+      });
+      await client.addComponent({
+        containerSlotId: addTimeSlot.id,
+        componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.TimeAndDate.Add_DateTime_TimeSpan',
+      });
+      await client.addComponent({
+        containerSlotId: formatSlot.id,
+        componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.FormatDateTimeAsTime',
+      });
+      await client.addComponent({
+        containerSlotId: timeDriveSlot.id,
+        componentType: '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>',
+      });
 
       // コンポーネント取得
-      const [receiverData, asyncData, getData, storeData, writeData, driveData, urlData, toUriData] = await Promise.all([
+      const [receiverData, asyncData, getData, storeData, writeData, driveData, urlData, toUriData,
+             offsetData, timeSpanData, addTimeData, formatData, timeDriveData] = await Promise.all([
         client.getSlot({ slotId: receiverSlot.id, includeComponentData: true }),
         client.getSlot({ slotId: asyncSlot.id, includeComponentData: true }),
         client.getSlot({ slotId: getSlot.id, includeComponentData: true }),
@@ -497,6 +574,11 @@ async function main() {
         client.getSlot({ slotId: driveSlot.id, includeComponentData: true }),
         client.getSlot({ slotId: urlSlot.id, includeComponentData: true }),
         client.getSlot({ slotId: toUriSlot.id, includeComponentData: true }),
+        client.getSlot({ slotId: offsetSlot.id, includeComponentData: true }),
+        client.getSlot({ slotId: timeSpanSlot.id, includeComponentData: true }),
+        client.getSlot({ slotId: addTimeSlot.id, includeComponentData: true }),
+        client.getSlot({ slotId: formatSlot.id, includeComponentData: true }),
+        client.getSlot({ slotId: timeDriveSlot.id, includeComponentData: true }),
       ]);
 
       const receiverComp = receiverData.data?.components?.find((c: any) => c.componentType?.includes('DynamicImpulseReceiver'));
@@ -508,8 +590,16 @@ async function main() {
       const proxyComp = driveData.data?.components?.find((c: any) => c.componentType?.includes('Proxy'));
       const urlStoreComp = urlData.data?.components?.find((c: any) => c.componentType?.includes('DataModelObjectFieldStore'));
       const toUriComp = toUriData.data?.components?.find((c: any) => c.componentType?.includes('StringToAbsoluteURI'));
+      // 時間計算用
+      const offsetComp = offsetData.data?.components?.find((c: any) => c.componentType?.includes('ValueInput'));
+      const timeSpanComp = timeSpanData.data?.components?.find((c: any) => c.componentType?.includes('TimeSpanFromHours'));
+      const addTimeComp = addTimeData.data?.components?.find((c: any) => c.componentType?.includes('Add_DateTime_TimeSpan'));
+      const formatComp = formatData.data?.components?.find((c: any) => c.componentType?.includes('FormatDateTimeAsTime'));
+      const timeDriveComp = timeDriveData.data?.components?.find((c: any) => c.componentType?.includes('ObjectFieldDrive'));
+      const timeProxyComp = timeDriveData.data?.components?.find((c: any) => c.componentType?.includes('Proxy'));
 
-      cityFluxData[city.query] = { receiverComp, asyncComp, getComp, storeComp, writeComp, driveComp, proxyComp, urlStoreComp, toUriComp };
+      cityFluxData[city.query] = { receiverComp, asyncComp, getComp, storeComp, writeComp, driveComp, proxyComp, urlStoreComp, toUriComp,
+                                   offsetComp, timeSpanComp, addTimeComp, formatComp, timeDriveComp, timeProxyComp };
 
       // URL設定
       const urlDataRefresh = await client.getSlot({ slotId: urlSlot.id, includeComponentData: true });
@@ -615,6 +705,77 @@ async function main() {
           await client.updateComponent({
             id: proxyComp.id,
             members: { Drive: { $type: 'reference', id: driveId, targetId: contentFieldId } } as any,
+          });
+        }
+      }
+
+      // ============ 時間計算用接続 ============
+      // ValueInput にオフセット値を設定
+      if (offsetComp?.id) {
+        await client.updateComponent({
+          id: offsetComp.id,
+          members: { Value: { $type: 'double', value: city.offset } } as any,
+        });
+      }
+
+      // TimeSpanFromHours.Value ← ValueInput
+      if (timeSpanComp?.id && offsetComp?.id) {
+        await client.updateComponent({
+          id: timeSpanComp.id,
+          members: { Value: { $type: 'reference', targetId: offsetComp.id } } as any,
+        });
+      }
+
+      // Add_DateTime_TimeSpan.A ← UtcNow
+      // Add_DateTime_TimeSpan.B ← TimeSpanFromHours
+      if (addTimeComp?.id && utcNowComp?.id && timeSpanComp?.id) {
+        await client.updateComponent({
+          id: addTimeComp.id,
+          members: {
+            A: { $type: 'reference', targetId: utcNowComp.id },
+            B: { $type: 'reference', targetId: timeSpanComp.id },
+          } as any,
+        });
+      }
+
+      // FormatDateTimeAsTime.Date ← Add_DateTime_TimeSpan
+      if (formatComp?.id && addTimeComp?.id) {
+        await client.updateComponent({
+          id: formatComp.id,
+          members: { Date: { $type: 'reference', targetId: addTimeComp.id } } as any,
+        });
+      }
+
+      // ObjectFieldDrive(time) - コンポーネント情報を再取得してから接続
+      if (timeDriveSlot?.id && cityTimeIds[city.query]) {
+        // 少し待ってから再取得
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const timeDriveDataRefresh = await client.getSlot({ slotId: timeDriveSlot.id, includeComponentData: true });
+        const timeDriveCompRefresh = timeDriveDataRefresh.data?.components?.find((c: any) => c.componentType?.includes('ObjectFieldDrive'));
+        const timeProxyCompRefresh = timeDriveDataRefresh.data?.components?.find((c: any) => c.componentType?.includes('Proxy'));
+
+        // Drive → TimeText.Content
+        if (timeProxyCompRefresh?.id) {
+          const timeTextDetails = await client.getComponent(cityTimeIds[city.query]);
+          const timeContentFieldId = timeTextDetails.data.members.Content?.id;
+
+          const timeProxyDetails = await client.getComponent(timeProxyCompRefresh.id);
+          const timeDriveId = timeProxyDetails.data.members.Drive?.id;
+
+          if (timeContentFieldId && timeDriveId) {
+            await client.updateComponent({
+              id: timeProxyCompRefresh.id,
+              members: { Drive: { $type: 'reference', id: timeDriveId, targetId: timeContentFieldId } } as any,
+            });
+          }
+        }
+
+        // Value ← FormatDateTimeAsTime
+        if (timeDriveCompRefresh?.id && formatComp?.id) {
+          await client.updateComponent({
+            id: timeDriveCompRefresh.id,
+            members: { Value: { $type: 'reference', targetId: formatComp.id } } as any,
           });
         }
       }
