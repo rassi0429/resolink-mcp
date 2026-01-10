@@ -94,8 +94,17 @@
 | UIX | VerticalLayout | `[FrooxEngine]FrooxEngine.UIX.VerticalLayout` |
 | UIX | HorizontalLayout | `[FrooxEngine]FrooxEngine.UIX.HorizontalLayout` |
 | UIX | LayoutElement | `[FrooxEngine]FrooxEngine.UIX.LayoutElement` |
+| Material | UI_UnlitMaterial | `[FrooxEngine]FrooxEngine.UI_UnlitMaterial` |
 | Interaction | Grabbable | `[FrooxEngine]FrooxEngine.Grabbable` |
 | Interaction | ButtonDynamicImpulseTrigger | `[FrooxEngine]FrooxEngine.ButtonDynamicImpulseTrigger` |
+| Interaction | PhysicalButton | `[FrooxEngine]FrooxEngine.PhysicalButton` |
+| Interaction | BoxCollider | `[FrooxEngine]FrooxEngine.BoxCollider` |
+| ProtoFlux | GlobalReference\<IButton\> | `[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IButton>` |
+| ProtoFlux | ButtonEvents | `[ProtoFluxBindings]...FrooxEngine.Interaction.ButtonEvents` |
+| ProtoFlux | StartAsyncTask | `[ProtoFluxBindings]...FrooxEngine.Async.StartAsyncTask` |
+| ProtoFlux | GET_String | `[ProtoFluxBindings]...FrooxEngine.Network.GET_String` |
+| ProtoFlux | StringToAbsoluteURI | `[ProtoFluxBindings]...Utility.Uris.StringToAbsoluteURI` |
+| ProtoFlux | DataModelObjectFieldStore\<string\> | `[ProtoFluxBindings]...FrooxEngine.Variables.DataModelObjectFieldStore<string>` |
 
 ---
 
@@ -103,7 +112,7 @@
 
 ### 重要: スケール設定
 
-UIXはピクセル単位で動作するため、**ルートスロットのスケールを0.001に設定する必要がある**:
+UIXはピクセル単位で動作するため、**UIXのルートスロットのスケールを0.001に設定する必要がある**:
 
 ```typescript
 await client.updateSlot({
@@ -134,6 +143,75 @@ Root (scale: 0.001)
     ├── VerticalLayout / HorizontalLayout
     └── 子要素...
 ```
+
+### 重要: Image と Text の Z-Fight 問題
+
+**同じスロットに Image と Text を配置すると Z-Fight して見えなくなる。**
+
+背景色付きのテキストを作る場合は、**別スロットに分ける**必要がある:
+
+```
+❌ 間違い（Z-Fight発生）
+TextSlot
+├── RectTransform
+├── Image (背景)
+└── Text (テキスト)  ← 見えなくなる
+
+✅ 正解（別スロットに分ける）
+BackgroundSlot
+├── RectTransform
+└── Image (背景)
+TextSlot (BackgroundSlotの子)
+├── RectTransform
+└── Text (テキスト)
+```
+
+または、親スロットにImageを置き、子スロットにTextを置く構造にする。
+
+### 重要: Image には UI_UnlitMaterial が必要
+
+**Image コンポーネントの Material が未設定だと、Unlit の描画順が正しく処理されず表示が乱れる。**
+
+UIX の Image を使う場合は、**UI_UnlitMaterial を作成して Image.Material に設定する**必要がある:
+
+```typescript
+// 1. UIXルートに UI_UnlitMaterial を追加
+await client.addComponent({
+  containerSlotId: uixRootId,
+  componentType: '[FrooxEngine]FrooxEngine.UI_UnlitMaterial',
+});
+
+// 2. コンポーネントIDを取得
+const uixRootData = await client.getSlot({ slotId: uixRootId, includeComponentData: true });
+const uiMaterial = uixRootData.data?.components?.find((c: any) =>
+  c.componentType?.includes('UI_UnlitMaterial')
+);
+
+// 3. UI_UnlitMaterial の設定（重要: これらの値が描画順を正しくする）
+await client.updateComponent({
+  id: uiMaterial.id,
+  members: {
+    ZWrite: { $type: 'enum', value: 'On', enumType: 'ZWrite' },
+    OffsetFactor: { $type: 'float', value: 1 },
+    OffsetUnits: { $type: 'float', value: 100 },
+    Sidedness: { $type: 'enum', value: 'Double', enumType: 'Sidedness' },
+  } as any,
+});
+
+// 4. Image.Material に設定
+await client.updateComponent({
+  id: imageId,
+  members: {
+    Tint: { $type: 'colorX', value: { r: 0.2, g: 0.2, b: 0.25, a: 1 } },
+    Material: { $type: 'reference', targetId: uiMaterial?.id },
+  } as any,
+});
+```
+
+**ポイント**:
+- UI_UnlitMaterial は UIX ルートに1つ作成
+- **背景の Image のみ** Material を設定する（子要素の Image は null でOK）
+- **必須設定**: `ZWrite: On`, `OffsetFactor: 1`, `OffsetUnits: 100`, `Sidedness: Double`
 
 ### UIXコンポーネントの設定例
 
@@ -316,6 +394,8 @@ main();
 - `colorful.ts` - シンプルな色変更
 - `create-house.ts` - 階層構造の構築
 - `create-flux-add.ts` - ProtoFlux 1+1 の作成例
+- `create-weather-widget.ts` - UIX + PhysicalButton + HTTP GET の完全な実装例
+- `create-weather-flux.ts` - 天気取得ProtoFluxの実装例
 
 ---
 
@@ -402,6 +482,59 @@ await client.updateComponent({
   } as any,
 });
 ```
+
+### ButtonEvents と PhysicalButton の接続
+
+ButtonEventsノードをPhysicalButtonに接続するには、**GlobalReference\<IButton\>**を経由する必要がある。
+
+```
+PhysicalButton ← GlobalReference<IButton>.Reference
+                        ↑
+ButtonEvents.Button ────┘
+```
+
+```typescript
+// 1. GlobalReference<IButton> を追加
+await client.addComponent({
+  containerSlotId: globalRefSlot.id,
+  componentType: '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IButton>',
+});
+
+// 2. ButtonEvents を追加
+await client.addComponent({
+  containerSlotId: buttonEventsSlot.id,
+  componentType: '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Interaction.ButtonEvents',
+});
+
+// 3. GlobalReference.Reference → PhysicalButton
+await client.updateComponent({
+  id: globalRefComp.id,
+  members: {
+    Reference: { $type: 'reference', targetId: physicalButton.id },
+  } as any,
+});
+
+// 4. ButtonEvents.Button → GlobalReference
+await client.updateComponent({
+  id: buttonEventsComp.id,
+  members: {
+    Button: { $type: 'reference', targetId: globalRefComp.id },
+  } as any,
+});
+
+// 5. ButtonEvents.Pressed → 次のノード（例: StartAsyncTask）
+await client.updateComponent({
+  id: buttonEventsComp.id,
+  members: {
+    Pressed: { $type: 'reference', targetId: startAsyncComp.id },
+  } as any,
+});
+```
+
+**ポイント**:
+- ButtonEvents.Button は `IButton` インターフェースを期待する
+- PhysicalButton は直接接続できない（GlobalReference経由が必要）
+- GlobalReference\<IButton\> が PhysicalButton と ButtonEvents を繋ぐ
 
 ### 出力メンバー（empty型）の参照
 
