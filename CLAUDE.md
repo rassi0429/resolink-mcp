@@ -105,6 +105,21 @@
 | ProtoFlux | GET_String | `[ProtoFluxBindings]...FrooxEngine.Network.GET_String` |
 | ProtoFlux | StringToAbsoluteURI | `[ProtoFluxBindings]...Utility.Uris.StringToAbsoluteURI` |
 | ProtoFlux | DataModelObjectFieldStore\<string\> | `[ProtoFluxBindings]...FrooxEngine.Variables.DataModelObjectFieldStore<string>` |
+| ProtoFlux | ValueObjectInput\<string\> | `[ProtoFluxBindings]...ValueObjectInput<string>` |
+| ProtoFlux | ObjectWrite\<string\> | `[ProtoFluxBindings]...ObjectWrite<string>` |
+| ProtoFlux | If | `[ProtoFluxBindings]...If` |
+| ProtoFlux | ValueInput\<bool\> | `[ProtoFluxBindings]...ValueInput<bool>` |
+| ProtoFlux | ObjectConditional\<string\> | `[ProtoFluxBindings]...ObjectConditional<string>` |
+| ProtoFlux | ObjectEquals\<string\> | `[ProtoFluxBindings]...ObjectEquals<string>` |
+| ProtoFlux | ValueWrite\<bool\> | `[ProtoFluxBindings]...ValueWrite<bool>` |
+| ProtoFlux | NOT_Bool | `[ProtoFluxBindings]...Operators.NOT_Bool` |
+| ProtoFlux | GlobalValue\<string\> | `[FrooxEngine]FrooxEngine.ProtoFlux.GlobalValue<string>` - IGlobalValueProxy実装、DynamicImpulseReceiver.Tagに必要 |
+| ProtoFlux | ObjectValueSource\<string\> | `[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectValueSource<string>` - IVariable実装 |
+| ProtoFlux | ValueSource\<bool\> | `[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueSource<bool>` - IVariable実装 |
+| ProtoFlux | GlobalReference\<IValue\<T\>\> | `[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IValue<string>>` |
+| ProtoFlux | ObjectWrite (FrooxEngineContext) | `[ProtoFluxBindings]...ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>` |
+| ProtoFlux | ValueWrite (FrooxEngineContext) | `[ProtoFluxBindings]...ValueWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,bool>` |
+| Relations | ValueDriver\<T\> | `[FrooxEngine]FrooxEngine.ValueDriver<T>` - ValueSource/DriveTargetメンバー |
 
 ---
 
@@ -396,6 +411,7 @@ main();
 - `create-flux-add.ts` - ProtoFlux 1+1 の作成例
 - `create-weather-widget.ts` - UIX + PhysicalButton + HTTP GET の完全な実装例
 - `create-weather-flux.ts` - 天気取得ProtoFluxの実装例
+- `create-tictactoe-complete.ts` - UIX + ProtoFlux 完全動作マルバツゲーム
 
 ---
 
@@ -913,3 +929,100 @@ await client.updateComponent({
 - HSV_ToColorX は S, V 入力が null だと色が出ない（要 ValueInput 接続）
 - Wiggler は floatQ（回転）のみ対応、float3（位置）は不可
 - DataModelObjectFieldStoreを使う場合はFrooxEngineContext版のObjectWriteが必要
+
+---
+
+## DynamicImpulse のジェネリック型
+
+### WithValue vs WithObject
+
+| ノード | 型制約 | 使用可能な型 |
+|--------|--------|-------------|
+| `DynamicImpulseReceiverWithValue<T>` | `where T : unmanaged` | `int`, `float`, `bool`, `colorX` 等のプリミティブ |
+| `DynamicImpulseReceiverWithObject<T>` | なし | `string`, `Slot`, `User` 等のオブジェクト型 |
+| `DynamicImpulseTriggerWithValue<T>` | `where T : unmanaged` | プリミティブ型 |
+| `DynamicImpulseTriggerWithObject<T>` | なし | オブジェクト型 |
+
+### 型名フォーマット
+
+```typescript
+// プリミティブ型（int, float, bool等）→ WithValue
+'[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiverWithValue<int>'
+'[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseTriggerWithValue<float>'
+
+// オブジェクト型（string, Slot等）→ WithObject
+'[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiverWithObject<string>'
+'[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseTriggerWithObject<[FrooxEngine]FrooxEngine.Slot>'
+```
+
+**注意**: `string`は`unmanaged`型ではないため、`WithValue<string>`は使用不可。`WithObject<string>`を使用する。
+
+---
+
+## DynamicImpulse のスコープ制御
+
+### 重要: Target を設定しないと全てのReceiverが反応する
+
+`ButtonDynamicImpulseTrigger.Target` を設定しないと、**同じTagを持つ全てのDynamicImpulseReceiverが反応**してしまう。
+
+複数のインスタンス（例: 複数のマルバツゲーム）が独立して動作するには、**アイテムのルートスロットをTargetに設定**する必要がある。
+
+```typescript
+// ButtonDynamicImpulseTrigger.Target にルートスロットを設定
+await client.updateComponent({
+  id: cellTrigger.id,
+  members: {
+    PressedTag: { $type: 'string', value: 'Cell_0' },
+    Target: { $type: 'reference', targetId: mainId },  // アイテムのルートスロット
+  } as any,
+});
+```
+
+**ポイント**:
+- Target にスロットを指定すると、そのスロット以下のReceiverのみが反応
+- 複数インスタンスを独立動作させるには必須
+- Fluxスロットではなく、アイテムのルート（メインスロット）を指定
+
+---
+
+## ValueField の初期値と null 比較
+
+### ValueField<string> の初期値は null
+
+`ValueField<string>` の初期値は**空文字ではなくnull**。
+
+空かどうかをチェックするには、**空文字との比較ではなくnull比較**が必要。
+
+```typescript
+// ❌ 間違い - 空文字との比較
+// ObjectEquals.A ← CellSource, ObjectEquals.B ← ValueObjectInput("")
+
+// ✅ 正解 - null比較（Bを未接続にする）
+await client.updateComponent({
+  id: equalsComp.id,
+  members: {
+    A: { $type: 'reference', targetId: cellSourceComp.id },
+    // B は未接続のまま（null比較になる）
+  } as any,
+});
+```
+
+### ObjectWrite で null を書き込む
+
+リセット時など、ValueFieldをnullに戻すには **ObjectWrite.Value を未接続** にする:
+
+```typescript
+// Variable のみ設定し、Value は接続しない → null が書き込まれる
+await client.updateComponent({
+  id: writeComp.id,
+  members: {
+    Variable: { $type: 'reference', targetId: sourceComp.id },
+    // Value は未接続（null が書き込まれる）
+  } as any,
+});
+```
+
+**ポイント**:
+- `ValueField<string>` 初期値 = null（空文字ではない）
+- `ObjectEquals.B` を未接続 → A と null を比較
+- `ObjectWrite.Value` を未接続 → null を書き込む
