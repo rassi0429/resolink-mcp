@@ -97,7 +97,7 @@ async function main() {
         } as any,
       });
       const rendererData = await client.getComponent(renderer.id);
-      const elementId = rendererData.data.members.Materials.elements[0].id;
+      const elementId = (rendererData.data.members as any).Materials.elements[0].id;
       await client.updateComponent({
         id: renderer.id,
         members: {

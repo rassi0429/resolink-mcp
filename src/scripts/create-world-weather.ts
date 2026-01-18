@@ -106,6 +106,7 @@ async function main() {
     await client.addSlot({ parentId: uixRootId, name: 'Background' });
     uixRootData = await client.getSlot({ slotId: uixRootId, depth: 1 });
     const bgSlot = uixRootData.data?.children?.find((c: any) => c.name?.value === 'Background');
+    if (!bgSlot?.id) throw new Error('Background slot not found');
     const bgId = bgSlot.id;
 
     await client.addComponent({ containerSlotId: bgId, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
@@ -141,6 +142,7 @@ async function main() {
     await client.addSlot({ parentId: uixRootId, name: 'Content' });
     uixRootData = await client.getSlot({ slotId: uixRootId, depth: 1 });
     const contentSlot = uixRootData.data?.children?.find((c: any) => c.name?.value === 'Content');
+    if (!contentSlot?.id) throw new Error('Content slot not found');
     const contentId = contentSlot.id;
 
     await client.addComponent({ containerSlotId: contentId, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
@@ -178,6 +180,7 @@ async function main() {
     await client.addSlot({ parentId: contentId, name: 'Title' });
     contentData = await client.getSlot({ slotId: contentId, depth: 1 });
     const titleSlot = contentData.data?.children?.find((c: any) => c.name?.value === 'Title');
+    if (!titleSlot?.id) throw new Error('Title slot not found');
     const titleId = titleSlot.id;
 
     await client.addComponent({ containerSlotId: titleId, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
@@ -215,6 +218,7 @@ async function main() {
       await client.addSlot({ parentId: contentId, name: `City_${city.query}` });
       contentData = await client.getSlot({ slotId: contentId, depth: 1 });
       const citySlot = contentData.data?.children?.find((c: any) => c.name?.value === `City_${city.query}`);
+      if (!citySlot?.id) throw new Error(`City slot not found: ${city.query}`);
       const cityId = citySlot.id;
 
       await client.addComponent({ containerSlotId: cityId, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
@@ -246,6 +250,7 @@ async function main() {
       await client.addSlot({ parentId: cityId, name: 'CityName' });
       cityData = await client.getSlot({ slotId: cityId, depth: 1 });
       const cityNameSlot = cityData.data?.children?.find((c: any) => c.name?.value === 'CityName');
+      if (!cityNameSlot?.id) throw new Error('CityName slot not found');
 
       await client.addComponent({ containerSlotId: cityNameSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
       await client.addComponent({ containerSlotId: cityNameSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.LayoutElement' });
@@ -278,6 +283,7 @@ async function main() {
       await client.addSlot({ parentId: cityId, name: 'Time' });
       cityData = await client.getSlot({ slotId: cityId, depth: 1 });
       const timeSlot = cityData.data?.children?.find((c: any) => c.name?.value === 'Time');
+      if (!timeSlot?.id) throw new Error('Time slot not found');
 
       await client.addComponent({ containerSlotId: timeSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
       await client.addComponent({ containerSlotId: timeSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.LayoutElement' });
@@ -311,6 +317,7 @@ async function main() {
       await client.addSlot({ parentId: cityId, name: 'Weather' });
       cityData = await client.getSlot({ slotId: cityId, depth: 1 });
       const weatherSlot = cityData.data?.children?.find((c: any) => c.name?.value === 'Weather');
+      if (!weatherSlot?.id) throw new Error('Weather slot not found');
 
       await client.addComponent({ containerSlotId: weatherSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
       await client.addComponent({ containerSlotId: weatherSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.LayoutElement' });
@@ -347,6 +354,7 @@ async function main() {
     await client.addSlot({ parentId: contentId, name: 'RefreshButton' });
     contentData = await client.getSlot({ slotId: contentId, depth: 1 });
     const btnSlot = contentData.data?.children?.find((c: any) => c.name?.value === 'RefreshButton');
+    if (!btnSlot?.id) throw new Error('RefreshButton slot not found');
     const btnId = btnSlot.id;
 
     await client.addComponent({ containerSlotId: btnId, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
@@ -388,6 +396,7 @@ async function main() {
     await client.addSlot({ parentId: btnId, name: 'ButtonText' });
     btnData = await client.getSlot({ slotId: btnId, depth: 1 });
     const btnTextSlot = btnData.data?.children?.find((c: any) => c.name?.value === 'ButtonText');
+    if (!btnTextSlot?.id) throw new Error('ButtonText slot not found');
 
     await client.addComponent({ containerSlotId: btnTextSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.RectTransform' });
     await client.addComponent({ containerSlotId: btnTextSlot.id, componentType: '[FrooxEngine]FrooxEngine.UIX.Text' });
@@ -427,6 +436,7 @@ async function main() {
     await client.addSlot({ parentId: mainId, name: 'Flux' });
     mainData = await client.getSlot({ slotId: mainId, depth: 1 });
     const fluxSlot = mainData.data?.children?.find((c: any) => c.name?.value === 'Flux');
+    if (!fluxSlot?.id) throw new Error('Flux slot not found');
     const fluxId = fluxSlot.id;
 
     // Tag用のGlobalValue<string>を作成
@@ -437,6 +447,7 @@ async function main() {
     let fluxData = await client.getSlot({ slotId: fluxId, depth: 1 });
     const tagSlot = fluxData.data?.children?.find((c: any) => c.name?.value === 'TagValue');
     const utcNowSlot = fluxData.data?.children?.find((c: any) => c.name?.value === 'UtcNow');
+    if (!tagSlot?.id || !utcNowSlot?.id) throw new Error('Flux/Tag slots not found');
 
     await client.addComponent({
       containerSlotId: tagSlot.id,
@@ -507,6 +518,11 @@ async function main() {
       const addTimeSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `AddTime_${city.query}`);
       const formatSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `Format_${city.query}`);
       const timeDriveSlot = fluxData.data?.children?.find((c: any) => c.name?.value === `TimeDrive_${city.query}`);
+
+      if (!receiverSlot?.id || !asyncSlot?.id || !getSlot?.id || !storeSlot?.id || !writeSlot?.id || !driveSlot?.id || !urlSlot?.id || !toUriSlot?.id ||
+          !offsetSlot?.id || !timeSpanSlot?.id || !addTimeSlot?.id || !formatSlot?.id || !timeDriveSlot?.id) {
+        throw new Error(`Flux slots not found for ${city.name}`);
+      }
 
       // コンポーネント追加
       await client.addComponent({
@@ -631,7 +647,7 @@ async function main() {
       // 接続: DynamicImpulseReceiver.OnTriggered → StartAsyncTask
       if (receiverComp?.id && asyncComp?.id) {
         const receiverDetails = await client.getComponent(receiverComp.id);
-        const onTriggeredId = receiverDetails.data.members.OnTriggered?.id;
+        const onTriggeredId = receiverDetails.data?.members?.OnTriggered?.id;
         if (onTriggeredId) {
           await client.updateComponent({
             id: receiverComp.id,
@@ -659,7 +675,7 @@ async function main() {
       // 接続: GET_String.OnResponse → ObjectWrite
       if (getComp?.id && writeComp?.id) {
         const getDetails = await client.getComponent(getComp.id);
-        const onResponseId = getDetails.data.members.OnResponse?.id;
+        const onResponseId = getDetails.data?.members?.OnResponse?.id;
         if (onResponseId) {
           await client.updateComponent({
             id: getComp.id,
@@ -668,7 +684,7 @@ async function main() {
         }
 
         // 接続: ObjectWrite.Value ← GET_String.Content
-        const contentId = getDetails.data.members.Content?.id;
+        const contentId = getDetails.data?.members?.Content?.id;
         if (contentId) {
           await client.updateComponent({
             id: writeComp.id,
@@ -696,10 +712,10 @@ async function main() {
       // 接続: ObjectFieldDrive.Drive → Text.Content
       if (proxyComp?.id && cityTextIds[city.query]) {
         const textDetails = await client.getComponent(cityTextIds[city.query]);
-        const contentFieldId = textDetails.data.members.Content?.id;
+        const contentFieldId = textDetails.data?.members?.Content?.id;
 
         const proxyDetails = await client.getComponent(proxyComp.id);
-        const driveId = proxyDetails.data.members.Drive?.id;
+        const driveId = proxyDetails.data?.members?.Drive?.id;
 
         if (contentFieldId && driveId) {
           await client.updateComponent({
@@ -758,10 +774,10 @@ async function main() {
         // Drive → TimeText.Content
         if (timeProxyCompRefresh?.id) {
           const timeTextDetails = await client.getComponent(cityTimeIds[city.query]);
-          const timeContentFieldId = timeTextDetails.data.members.Content?.id;
+          const timeContentFieldId = timeTextDetails.data?.members?.Content?.id;
 
           const timeProxyDetails = await client.getComponent(timeProxyCompRefresh.id);
-          const timeDriveId = timeProxyDetails.data.members.Drive?.id;
+          const timeDriveId = timeProxyDetails.data?.members?.Drive?.id;
 
           if (timeContentFieldId && timeDriveId) {
             await client.updateComponent({

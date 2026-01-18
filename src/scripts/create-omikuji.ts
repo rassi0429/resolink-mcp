@@ -399,7 +399,7 @@ async function main() {
     // 少し待ってから再取得
     await new Promise(r => setTimeout(r, 100));
     const muxDetails = await client.getComponent(muxComp.id);
-    const inputElements = muxDetails.data.members.Inputs.elements;
+    const inputElements = (muxDetails.data.members as any).Inputs.elements;
 
     // 要素IDを使って参照設定
     if (inputElements?.length > 0) {
@@ -474,8 +474,8 @@ async function main() {
     console.log('ProtoFlux created');
 
     // ProtoFluxノードを初期化するため、一度非アクティブ→アクティブにする
-    await client.updateSlot({ slotId: mainId, isActive: false });
-    await client.updateSlot({ slotId: mainId, isActive: true });
+    await client.updateSlot({ id: mainId, isActive: false });
+    await client.updateSlot({ id: mainId, isActive: true });
     console.log('ProtoFlux initialized (reactivated)');
 
     console.log(`\nDone! おみくじUIX: ${slotName}`);
