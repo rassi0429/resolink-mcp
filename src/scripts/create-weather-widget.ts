@@ -353,7 +353,7 @@ async function main() {
       });
 
       const rendererData = await client.getComponent(meshRenderer.id);
-      const elementId = rendererData.data.members.Materials?.elements?.[0]?.id;
+      const elementId = (rendererData.data.members as any).Materials?.elements?.[0]?.id;
       if (elementId) {
         await client.updateComponent({
           id: meshRenderer.id,
